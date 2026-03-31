@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
-import { Plus, Search, Trash2, ShoppingCart, CheckCircle, AlertTriangle, PackagePlus, BarChart2, X, FileSpreadsheet, Calendar, Zap, Filter } from "lucide-react";
+import { Plus, Search, Trash2, ShoppingCart, CheckCircle, AlertTriangle, PackagePlus, BarChart2, X, FileSpreadsheet, Calendar, Zap, Filter, Pencil } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
-import { getOrders, createOrder, deleteOrder, getProducts, getCustomers, createExport, updateOrderStatus, getExports } from "../services/api";
+import { getOrders, createOrder, deleteOrder, updateOrder, getProducts, getCustomers, createExport, updateOrderStatus, getExports } from "../services/api";
 import { useToast } from "../components/Toast";
 
 export default function OrdersPage() {
@@ -12,6 +12,8 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingOrder, setEditingOrder] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [showPendingOnly, setShowPendingOnly] = useState(false);
@@ -22,6 +24,7 @@ export default function OrdersPage() {
     orderDate: new Date().toISOString().substring(0, 10),
     note: "",
     items: [],
+    totalAmount: 0,
   });
 
   const fetchData = async () => {
@@ -92,6 +95,7 @@ export default function OrdersPage() {
           orderDate: new Date().toISOString().substring(0, 10),
           note: "",
           items: [],
+          totalAmount: 0,
         });
       }
     } catch (err) {
@@ -109,6 +113,53 @@ export default function OrdersPage() {
       }
     } catch (err) {
       addToast("Lỗi: " + err.message, "error");
+    }
+  };
+
+  const handleEdit = (order) => {
+    setEditingOrder(order);
+    setFormData({
+      customerName: order.customerName,
+      orderDate: new Date(order.orderDate).toISOString().substring(0, 10),
+      note: order.note || "",
+      items: order.items.map(it => ({
+        product: it.product?._id || it.product,
+        quantity: it.quantity,
+      })),
+      totalAmount: order.totalAmount || 0,
+    });
+    setShowEditModal(true);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (formData.items.length === 0) {
+      addToast("Vui lòng chọn ít nhất 1 sản phẩm", "warning");
+      return;
+    }
+    const productIds = formData.items.map(item => item.product);
+    const uniqueIds = new Set(productIds);
+    if (uniqueIds.size !== productIds.length) {
+      addToast("Sản phẩm bị trùng lặp trong danh sách", "warning");
+      return;
+    }
+    try {
+      const res = await updateOrder(editingOrder._id, formData);
+      if (res.data.success) {
+        setOrders(prev => prev.map(o => o._id === editingOrder._id ? res.data.data : o));
+        addToast("Cập nhật đơn hàng thành công!", "success");
+        setShowEditModal(false);
+        setEditingOrder(null);
+        setFormData({
+          customerName: "",
+          orderDate: new Date().toISOString().substring(0, 10),
+          note: "",
+          items: [],
+          totalAmount: 0,
+        });
+      }
+    } catch (err) {
+      addToast("Lỗi: " + (err.response?.data?.message || err.message || "Không xác định"), "error");
     }
   };
 
@@ -479,8 +530,8 @@ export default function OrdersPage() {
                   <th>Mã đơn</th>
                   <th>Khách hàng</th>
                   <th>Ngày đặt</th>
-                  <th>Sản phẩm Yêu Cầu</th>
-                  <th>Tình trạng Tồn kho</th>
+                  <th>Sản phẩm Yêu Cầu &amp; Tình trạng Tồn kho</th>
+                  <th>Tổng tiền</th>
                   <th>Hành động</th>
                 </tr>
               </thead>
@@ -509,74 +560,76 @@ export default function OrdersPage() {
                       <td className="fw-700 text-primary" style={{ fontSize: "15px" }}>{o.customerName}</td>
                       <td>{new Date(o.orderDate).toLocaleDateString("vi-VN")}</td>
                       <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                          {o.items.map((it, idx) => (
-                            <div key={idx} style={{ fontSize: "12px" }}>
-                              • {it.product?.name || "SP đã xóa"}: <strong>{it.quantity}</strong> {it.product?.unit}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                           {o.items.map((it, idx) => {
-                            if (!it.product) return <span key={idx} className="badge badge-danger">Lỗi SP</span>;
-                            if (o.status === "Đã xuất thành công") {
-                              return (
-                                <div key={idx}>
-                                  <span className="badge badge-success">
-                                    <CheckCircle size={12} /> Đã xuất đủ
-                                  </span>
-                                </div>
+                            // Build status badge
+                            let statusNode;
+                            if (!it.product) {
+                              statusNode = <span className="badge badge-danger">Lỗi SP</span>;
+                            } else if (o.status === "Đã xuất thành công") {
+                              statusNode = (
+                                <span className="badge badge-success">
+                                  <CheckCircle size={12} /> Đã xuất đủ
+                                </span>
                               );
-                            }
+                            } else {
+                              let exportedQty = 0;
+                              exportsList.forEach(ex => {
+                                if (ex.note === `Xuất trước cho đơn hàng: ${o.code}`) {
+                                  const matchedItem = ex.items.find(e => e.product?._id === it.product._id || e.product === it.product._id);
+                                  if (matchedItem) exportedQty += matchedItem.quantity;
+                                }
+                              });
+                              const remainingToFulfil = it.quantity - exportedQty;
+                              const missing = remainingToFulfil - it.product.quantity;
+                              const isEnough = missing <= 0;
 
-                            // Calculate exported amount from exports history
-                            let exportedQty = 0;
-                            exportsList.forEach(ex => {
-                              if (ex.note === `Xuất trước cho đơn hàng: ${o.code}`) {
-                                const matchedItem = ex.items.find(e => e.product?._id === it.product._id || e.product === it.product._id);
-                                if (matchedItem) exportedQty += matchedItem.quantity;
-                              }
-                            });
-
-                            const remainingToFulfil = it.quantity - exportedQty;
-                            const missing = remainingToFulfil - it.product.quantity;
-                            const isEnough = missing <= 0;
-
-                            if (remainingToFulfil <= 0 && exportedQty > 0) {
-                              return (
-                                <div key={idx}>
+                              if (remainingToFulfil <= 0 && exportedQty > 0) {
+                                statusNode = (
                                   <span className="badge badge-success">
                                     <CheckCircle size={12} /> Đã xuất đủ ({exportedQty})
                                   </span>
-                                </div>
-                              );
+                                );
+                              } else {
+                                statusNode = (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "2px", alignItems: "flex-start" }}>
+                                    {exportedQty > 0 && (
+                                      <span className="text-info fw-600" style={{ fontSize: "11px" }}>
+                                        ⚡ Đã xuất: {exportedQty}
+                                      </span>
+                                    )}
+                                    {isEnough ? (
+                                      <span className="badge badge-success">
+                                        <CheckCircle size={12} /> Đủ xuất (Tồn: {it.product.quantity})
+                                      </span>
+                                    ) : (
+                                      <span className="badge badge-danger">
+                                        <AlertTriangle size={12} /> Thiếu {missing} {it.product.unit} (Tồn: {it.product.quantity})
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              }
                             }
 
                             return (
-                              <div key={idx} style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                                {exportedQty > 0 && (
-                                  <span className="text-info fw-600" style={{ fontSize: "11px" }}>
-                                    ⚡ Đã xuất: {exportedQty}
-                                  </span>
-                                )}
-                                {isEnough ? (
-                                  <span className="badge badge-success">
-                                    <CheckCircle size={12} /> Đủ xuất (Tồn: {it.product.quantity})
-                                  </span>
-                                ) : (
-                                  <span className="badge badge-danger">
-                                    <AlertTriangle size={12} /> Thiếu {missing} {it.product.unit} (Tồn: {it.product.quantity})
-                                  </span>
-                                )}
+                              <div key={idx} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px", padding: "4px 0", borderBottom: idx < o.items.length - 1 ? "1px solid rgba(255,255,255,0.06)" : "none" }}>
+                                <div style={{ fontSize: "12px", whiteSpace: "nowrap", minWidth: "140px" }}>
+                                  • {it.product?.name || "SP đã xóa"}: <strong>{it.quantity}</strong> {it.product?.unit}
+                                </div>
+                                <div style={{ flexShrink: 0 }}>
+                                  {statusNode}
+                                </div>
                               </div>
                             );
                           })}
                         </div>
                       </td>
+                      <td className="fw-600 text-success">
+                        {o.totalAmount ? o.totalAmount.toLocaleString("vi-VN") + " đ" : "-"}
+                      </td>
                       <td>
-                        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", minWidth: "220px" }}>
                           {o.status !== "Đã xuất thành công" && (() => {
                             // Calculate global exported amount for this order to know real remaining
                             let orderExportedMap = {};
@@ -630,6 +683,16 @@ export default function OrdersPage() {
                               </>
                             );
                           })()}
+                          {o.status !== "Đã xuất thành công" && (
+                            <button
+                              className="btn btn-icon btn-ghost"
+                              title="Sửa đơn hàng"
+                              style={{ color: "var(--primary-color, #4f46e5)" }}
+                              onClick={() => handleEdit(o)}
+                            >
+                              <Pencil size={16} />
+                            </button>
+                          )}
                           <button
                             className="btn btn-icon btn-ghost text-danger"
                             title="Xóa đơn"
@@ -725,7 +788,7 @@ export default function OrdersPage() {
                             >
                               {products.map((p) => (
                                 <option key={p._id} value={p._id}>
-                                  {p.name} - {p.code} (Tồn hiện tại: {p.quantity} {p.unit})
+                                  {p.name} - CÒN TỒN: {p.quantity} {p.unit}
                                 </option>
                               ))}
                             </select>
@@ -754,14 +817,26 @@ export default function OrdersPage() {
                   )}
                 </div>
 
-                <div className="form-group">
-                  <label className="form-label">Ghi chú (Tùy chọn)</label>
-                  <textarea
-                    className="form-textarea"
-                    placeholder="Ghi chú thêm về đơn đặt hàng..."
-                    value={formData.note}
-                    onChange={(e) => setFormData({ ...formData, note: e.target.value })}
-                  />
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Tổng số tiền (VNĐ)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      min="0"
+                      value={formData.totalAmount}
+                      onChange={(e) => setFormData({ ...formData, totalAmount: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ghi chú (Tùy chọn)</label>
+                    <textarea
+                      className="form-textarea"
+                      placeholder="Ghi chú thêm về đơn đặt hàng..."
+                      value={formData.note}
+                      onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                    />
+                  </div>
                 </div>
               </form>
             </div>
@@ -771,6 +846,136 @@ export default function OrdersPage() {
               </button>
               <button type="submit" form="orderForm" className="btn btn-primary">
                 Tạo Đơn Hàng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Modal Sửa Đơn Đặt Hàng --- */}
+      {showEditModal && editingOrder && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>✏️ Sửa Đơn Hàng — {editingOrder.code}</h3>
+              <button className="btn btn-icon btn-ghost" onClick={() => { setShowEditModal(false); setEditingOrder(null); }}>✕</button>
+            </div>
+            <div className="modal-body">
+              <form id="editOrderForm" onSubmit={handleUpdate} className="d-flex" style={{ flexDirection: "column", gap: "20px" }}>
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Khách hàng</label>
+                    <select
+                      required
+                      className="form-select"
+                      value={formData.customerName}
+                      onChange={(e) => setFormData({ ...formData, customerName: e.target.value })}
+                    >
+                      <option value="">-- Chọn khách hàng --</option>
+                      {customers.map((c) => (
+                        <option key={c._id} value={c.name}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ngày nhận hàng</label>
+                    <input
+                      type="date"
+                      required
+                      className="form-input"
+                      value={formData.orderDate}
+                      onChange={(e) => setFormData({ ...formData, orderDate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="section-title justify-between mb-16">
+                    <span className="d-flex align-center gap-8">
+                      <ShoppingCart size={16} className="text-primary" />
+                      Danh sách đặt món
+                    </span>
+                    <button type="button" className="btn btn-sm btn-primary" onClick={handleAddItem}>
+                      <Plus size={14} /> Thêm món
+                    </button>
+                  </div>
+
+                  {formData.items.length === 0 ? (
+                    <div className="empty-state" style={{ padding: "30px 20px" }}>
+                      <p>Chưa có món nào. Bấm "Thêm món" để thêm.</p>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                      {formData.items.map((item, index) => (
+                        <div key={index} className="item-row">
+                          <div className="form-group flex-1">
+                            <label className="form-label">Sản phẩm</label>
+                            <select
+                              required
+                              className="form-select"
+                              value={item.product}
+                              onChange={(e) => handleItemChange(index, "product", e.target.value)}
+                            >
+                              {products.map((p) => (
+                                <option key={p._id} value={p._id}>
+                                  {p.name} - CÒN TỒN: {p.quantity} {p.unit}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="form-group" style={{ width: "120px" }}>
+                            <label className="form-label">Số lượng đặt</label>
+                            <input
+                              type="number"
+                              required
+                              min="1"
+                              className="form-input"
+                              value={item.quantity}
+                              onChange={(e) => handleItemChange(index, "quantity", Number(e.target.value))}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-icon btn-ghost text-danger"
+                            onClick={() => handleRemoveItem(index)}
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid-2">
+                  <div className="form-group">
+                    <label className="form-label">Tổng số tiền (VNĐ)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      min="0"
+                      value={formData.totalAmount}
+                      onChange={(e) => setFormData({ ...formData, totalAmount: Number(e.target.value) })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Ghi chú (Tùy chọn)</label>
+                    <textarea
+                      className="form-textarea"
+                      placeholder="Ghi chú thêm về đơn đặt hàng..."
+                      value={formData.note}
+                      onChange={(e) => setFormData({ ...formData, note: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </form>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={() => { setShowEditModal(false); setEditingOrder(null); }}>
+                Hủy bỏ
+              </button>
+              <button type="submit" form="editOrderForm" className="btn btn-primary">
+                Lưu thay đổi
               </button>
             </div>
           </div>
