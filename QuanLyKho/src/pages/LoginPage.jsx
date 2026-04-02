@@ -70,17 +70,15 @@ export default function LoginPage() {
           </div>
           <h1
             style={{
-              fontSize: "24px",
+              fontSize: "30px",
               fontWeight: 700,
               color: "var(--text-primary)",
               margin: 0,
             }}
           >
-            Kho Cháo UNO
+            Kho Cháo 38
           </h1>
-          <p style={{ color: "var(--text-muted)", marginTop: "6px", fontSize: "14px" }}>
-            Đăng nhập để quản lý hệ thống
-          </p>
+          
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

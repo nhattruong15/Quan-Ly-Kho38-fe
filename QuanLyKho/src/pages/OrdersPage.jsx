@@ -460,10 +460,7 @@ export default function OrdersPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h2>Đơn Đặt Hàng</h2>
-          <p>Quản lý yêu cầu đặt món và đối chiếu tồn kho</p>
-        </div>
+      
         <div style={{ display: "flex", gap: "12px" }}>
           <button 
             className="btn btn-outline" 

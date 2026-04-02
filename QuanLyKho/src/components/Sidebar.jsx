@@ -21,7 +21,7 @@ const navItems = [
         { to: "/imports", label: "Phiếu nhập kho", icon: PackagePlus },
         { to: "/exports", label: "Phiếu xuất kho", icon: PackageMinus },
         { to: "/orders", label: "Đơn đặt hàng", icon: ShoppingCart },
-        { to: "/calendar", label: "Lịch đơn hàng", icon: CalendarDays },
+        // { to: "/calendar", label: "Lịch đơn hàng", icon: CalendarDays },
         { to: "/customers", label: "Khách hàng", icon: Users },
       ]
     },
@@ -73,7 +73,7 @@ export default function Sidebar({ open, onClose }) {
             <ChefHat size={20} color="#020c1b" />
           </div>
           <div className="sidebar-logo-text">
-            <h2>Kho Cháo UNO</h2>
+            <h2>Kho Cháo 38</h2>
             <span>Quản lý nhập xuất kho</span>
           </div>
           {/* Close button — visible on mobile */}

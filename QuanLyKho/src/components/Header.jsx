@@ -6,6 +6,10 @@ const pageMeta = {
   "/inventory": { title: "Tồn kho", desc: "Theo dõi số lượng hàng hiện có" },
   "/imports": { title: "Phiếu nhập kho", desc: "Quản lý phiếu nhập hàng hóa" },
   "/exports": { title: "Phiếu xuất kho", desc: "Quản lý phiếu xuất hàng hóa" },
+  "/orders": { title: "Đơn đặt hàng", desc: "Quản lý yêu cầu đặt món và đối chiếu tồn kho" },
+  "/customers": { title: "Quản lý khách hàng", desc: "Danh sách khách hàng trong hệ thống" },
+  // "/calendar": { title: "Lịch đơn hàng", desc: "Xem đơn hàng theo ngày" },
+  "/appointments": { title: "Đơn hẹn", desc: "Quản lý lịch hẹn và ghi chú theo ngày" },
 };
 
 export default function Header({ pathname, onMenuClick }) {

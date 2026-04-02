@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, PackageMinus, X, Calendar } from "lucide-react";
+import { Plus, Trash2, PackageMinus, X, Calendar, Download } from "lucide-react";
 import { getExports, createExport, deleteExport, getProducts, getOrders, updateOrderStatus } from "../services/api";
+import * as XLSX from "xlsx-js-style";
 import { useToast } from "../components/Toast";
 
 const PURPOSES = ["Bếp chính", "Bếp phụ", "Kiểm kê", "Hủy hàng", "Khác"];
@@ -12,7 +13,7 @@ export default function ExportPage() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterDate, setFilterDate] = useState("");
-  const [form, setForm] = useState({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: 1 }] });
+  const [form, setForm] = useState({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: "" }] });
   const toast = useToast();
 
   const fetch = async () => {
@@ -26,7 +27,7 @@ export default function ExportPage() {
   };
   useEffect(() => { fetch(); }, []);
 
-  const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { product: "", quantity: 1 }] }));
+  const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { product: "", quantity: "" }] }));
   const removeItem = (i) => setForm((f) => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
   const updateItem = (i, field, val) => setForm((f) => {
     const items = [...f.items];
@@ -42,7 +43,7 @@ export default function ExportPage() {
       await createExport(form);
       toast("Tạo phiếu xuất thành công!", "success");
       setShowModal(false);
-      setForm({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: 1 }] });
+      setForm({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: "" }] });
       fetch();
     } catch (err) { toast(err.response?.data?.message || "Lỗi: Không đủ tồn kho", "error"); }
     finally { setSaving(false); }
@@ -86,6 +87,62 @@ export default function ExportPage() {
         return `${yyyy}-${mm}-${dd}` === filterDate;
       })
     : exports;
+
+  const handleExportSingleExcel = (ex) => {
+    const exportData = [];
+    const dateStr = new Date(ex.exportDate).toLocaleDateString("vi-VN");
+    ex.items.forEach((it) => {
+      exportData.push({
+        "Ngày tháng năm": dateStr,
+        "Sản phẩm": it.product?.name || "Sản phẩm không xác định",
+        "Số lượng": it.quantity
+      });
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+    for (let R = range.s.r; R <= range.e.r; ++R) {
+      for (let C = range.s.c; C <= range.e.c; ++C) {
+        const cellRef = XLSX.utils.encode_cell({ r: R, c: C });
+        if (!worksheet[cellRef]) continue;
+
+        let cellStyle = {
+          font: { sz: 14, name: "Arial" },
+          alignment: { vertical: "center", horizontal: "left" },
+          border: {
+            top: { style: "thin", color: { auto: 1 } },
+            bottom: { style: "thin", color: { auto: 1 } },
+            left: { style: "thin", color: { auto: 1 } },
+            right: { style: "thin", color: { auto: 1 } }
+          }
+        };
+
+        if (R === 0) {
+          cellStyle = {
+            font: { bold: true, sz: 16, color: { rgb: "FFFFFF" }, name: "Arial" },
+            fill: { fgColor: { rgb: "4F81BD" } },
+            alignment: { vertical: "center", horizontal: "center" },
+            border: {
+              top: { style: "medium", color: { rgb: "000000" } },
+              bottom: { style: "medium", color: { rgb: "000000" } },
+              left: { style: "thin", color: { rgb: "000000" } },
+              right: { style: "thin", color: { rgb: "000000" } }
+            }
+          };
+        }
+
+        worksheet[cellRef].s = cellStyle;
+      }
+    }
+
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "PhieuXuat");
+
+    worksheet["!cols"] = [{ wch: 40 }, { wch: 40 }, { wch: 40 }];
+    
+    XLSX.writeFile(workbook, `PhieuXuat_${ex.code}.xlsx`);
+  };
 
   return (
     <div>
@@ -139,6 +196,9 @@ export default function ExportPage() {
                       </td>
                       <td className="text-muted">{ex.note || "—"}</td>
                       <td>
+                        <button className="btn btn-success btn-sm btn-icon" style={{ marginRight: 8 }} onClick={() => handleExportSingleExcel(ex)} title="Xuất Excel">
+                          <Download size={13} />
+                        </button>
                         <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDelete(ex)}>
                           <Trash2 size={13} />
                         </button>
@@ -192,7 +252,7 @@ export default function ExportPage() {
                     <div className="form-group">
                       <label className="form-label">Số lượng</label>
                       <input className="form-input" type="number" min="1" value={item.quantity}
-                        onChange={(e) => updateItem(i, "quantity", Number(e.target.value))} />
+                        onChange={(e) => updateItem(i, "quantity", e.target.value === "" ? "" : Number(e.target.value))} />
                     </div>
                     <button type="button" className="btn btn-danger btn-icon" style={{ marginBottom: 2 }}
                       onClick={() => removeItem(i)} disabled={form.items.length === 1}>

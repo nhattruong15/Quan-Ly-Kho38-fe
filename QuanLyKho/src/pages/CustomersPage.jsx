@@ -84,10 +84,7 @@ export default function CustomersPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h2>Quản Lý Khách Hàng</h2>
-          <p>Danh sách khách hàng trong hệ thống</p>
-        </div>
+      
         <button className="btn btn-primary" onClick={openAdd}>
           <Plus size={16} /> Thêm khách hàng
         </button>

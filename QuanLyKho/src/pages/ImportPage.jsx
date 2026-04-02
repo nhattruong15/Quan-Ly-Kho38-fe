@@ -12,7 +12,7 @@ export default function ImportPage() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterDate, setFilterDate] = useState("");
-  const [form, setForm] = useState({ supplier: "kho 38", note: "", items: [{ product: "", quantity: 1, price: "" }] });
+  const [form, setForm] = useState({ supplier: "kho 38", note: "", items: [{ product: "", quantity: "", price: "" }] });
   const [viewDetails, setViewDetails] = useState(null);
   const toast = useToast();
 
@@ -27,7 +27,7 @@ export default function ImportPage() {
   };
   useEffect(() => { fetch(); }, []);
 
-  const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { product: "", quantity: 1, price: "" }] }));
+  const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { product: "", quantity: "", price: "" }] }));
   const removeItem = (i) => setForm((f) => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
   const updateItem = (i, field, val) => setForm((f) => {
     const items = [...f.items];
@@ -49,7 +49,7 @@ export default function ImportPage() {
       await createImport(form);
       toast("Tạo phiếu nhập thành công!", "success");
       setShowModal(false);
-      setForm({ supplier: "kho 38", note: "", items: [{ product: "", quantity: 1, price: "" }] });
+      setForm({ supplier: "kho 38", note: "", items: [{ product: "", quantity: "", price: "" }] });
       fetch();
     } catch (err) { toast(err.response?.data?.message || "Lỗi khi lưu", "error"); }
     finally { setSaving(false); }
@@ -79,7 +79,7 @@ export default function ImportPage() {
       <div className="page-header">
         
         <button className="btn btn-success" onClick={() => {
-          setForm({ supplier: "kho 38", note: "", items: [{ product: "", quantity: 1, price: "" }] });
+          setForm({ supplier: "kho 38", note: "", items: [{ product: "", quantity: "", price: "" }] });
           setShowModal(true);
         }}>
           <Plus size={16} /> Tạo phiếu nhập
@@ -173,12 +173,12 @@ export default function ImportPage() {
                     <div className="form-group">
                       <label className="form-label">Số lượng</label>
                       <input className="form-input" type="number" min="1" value={item.quantity}
-                        onChange={(e) => updateItem(i, "quantity", Number(e.target.value))} />
+                        onChange={(e) => updateItem(i, "quantity", e.target.value === "" ? "" : Number(e.target.value))} />
                     </div>
                     <div className="form-group">
                       <label className="form-label">Đơn giá (₫)</label>
                       <input className="form-input" type="number" min="0" value={item.price} placeholder="Giá nhập"
-                        onChange={(e) => updateItem(i, "price", Number(e.target.value))} />
+                        onChange={(e) => updateItem(i, "price", e.target.value === "" ? "" : Number(e.target.value))} />
                     </div>
                     <button type="button" className="btn btn-danger btn-icon" style={{ marginBottom: 2 }}
                       onClick={() => removeItem(i)} disabled={form.items.length === 1}>
