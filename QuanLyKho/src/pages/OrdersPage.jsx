@@ -14,6 +14,8 @@ export default function OrdersPage() {
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingOrder, setEditingOrder] = useState(null);
+  const [exportModal, setExportModal] = useState(null);
+  const [orderInputs, setOrderInputs] = useState({});
   const [searchTerm, setSearchTerm] = useState("");
   const [filterDate, setFilterDate] = useState("");
   const [showPendingOnly, setShowPendingOnly] = useState(false);
@@ -23,7 +25,6 @@ export default function OrdersPage() {
     customerName: "",
     orderDate: new Date().toISOString().substring(0, 10),
     note: "",
-    items: [],
     totalAmount: 0,
   });
 
@@ -32,7 +33,10 @@ export default function OrdersPage() {
       setLoading(true);
       const [orderRes, prodRes, custRes, expRes] = await Promise.all([getOrders(), getProducts(), getCustomers(), getExports()]);
       if (orderRes.data.success) setOrders(orderRes.data.data);
-      if (prodRes.data.success) setProducts(prodRes.data.data);
+      if (prodRes.data.success) {
+        const sortedProds = (prodRes.data.data || []).sort((a, b) => (a.code || "").localeCompare(b.code || "", undefined, { numeric: true, sensitivity: 'base' }));
+        setProducts(sortedProds);
+      }
       if (custRes.data.success) setCustomers(custRes.data.data);
       if (expRes?.data?.data) setExportsList(expRes.data.data);
     } catch (err) {
@@ -47,46 +51,20 @@ export default function OrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleAddItem = () => {
-    if (products.length === 0) {
-      addToast("Không có sản phẩm nào trong kho để chọn!", "warning");
-      return;
-    }
-    setFormData({
-      ...formData,
-      items: [...formData.items, { product: products[0]._id, quantity: 1 }],
-    });
-  };
-
-  const handleRemoveItem = (index) => {
-    const newItems = [...formData.items];
-    newItems.splice(index, 1);
-    setFormData({ ...formData, items: newItems });
-  };
-
-  const handleItemChange = (index, field, value) => {
-    const newItems = [...formData.items];
-    newItems[index][field] = value;
-    setFormData({ ...formData, items: newItems });
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (formData.items.length === 0) {
-      addToast("Vui lòng chọn ít nhất 1 sản phẩm", "warning");
-      return;
-    }
-    
-    // Check if duplicate products in order
-    const productIds = formData.items.map(item => item.product);
-    const uniqueIds = new Set(productIds);
-    if (uniqueIds.size !== productIds.length) {
-      addToast("Sản phẩm bị trùng lặp trong danh sách", "warning");
-      return;
-    }
+    const items = products
+      .filter(p => Number(orderInputs[p._id]?.quantity) > 0)
+      .map(p => ({
+        product: p._id,
+        quantity: Number(orderInputs[p._id].quantity)
+      }));
+
+    if (items.length === 0) return addToast("Vui lòng nhập số lượng cho ít nhất 1 sản phẩm", "warning");
 
     try {
-      const res = await createOrder(formData);
+      const payload = { ...formData, items };
+      const res = await createOrder(payload);
       if (res.data.success) {
         setOrders(prev => [res.data.data, ...prev]);
         setShowModal(false);
@@ -94,9 +72,9 @@ export default function OrdersPage() {
           customerName: "",
           orderDate: new Date().toISOString().substring(0, 10),
           note: "",
-          items: [],
           totalAmount: 0,
         });
+        setOrderInputs({});
       }
     } catch (err) {
       addToast("Lỗi: " + (err.response?.data?.message || err.message || "Không xác định"), "error");
@@ -122,29 +100,31 @@ export default function OrdersPage() {
       customerName: order.customerName,
       orderDate: new Date(order.orderDate).toISOString().substring(0, 10),
       note: order.note || "",
-      items: order.items.map(it => ({
-        product: it.product?._id || it.product,
-        quantity: it.quantity,
-      })),
       totalAmount: order.totalAmount || 0,
     });
+    
+    const initials = {};
+    order.items.forEach(it => {
+        initials[it.product?._id || it.product] = { quantity: it.quantity };
+    });
+    setOrderInputs(initials);
     setShowEditModal(true);
   };
 
   const handleUpdate = async (e) => {
     e.preventDefault();
-    if (formData.items.length === 0) {
-      addToast("Vui lòng chọn ít nhất 1 sản phẩm", "warning");
-      return;
-    }
-    const productIds = formData.items.map(item => item.product);
-    const uniqueIds = new Set(productIds);
-    if (uniqueIds.size !== productIds.length) {
-      addToast("Sản phẩm bị trùng lặp trong danh sách", "warning");
-      return;
-    }
+    const items = products
+      .filter(p => Number(orderInputs[p._id]?.quantity) > 0)
+      .map(p => ({
+        product: p._id,
+        quantity: Number(orderInputs[p._id].quantity)
+      }));
+
+    if (items.length === 0) return addToast("Vui lòng nhập số lượng cho ít nhất 1 sản phẩm", "warning");
+
     try {
-      const res = await updateOrder(editingOrder._id, formData);
+      const payload = { ...formData, items };
+      const res = await updateOrder(editingOrder._id, payload);
       if (res.data.success) {
         setOrders(prev => prev.map(o => o._id === editingOrder._id ? res.data.data : o));
         addToast("Cập nhật đơn hàng thành công!", "success");
@@ -154,72 +134,16 @@ export default function OrdersPage() {
           customerName: "",
           orderDate: new Date().toISOString().substring(0, 10),
           note: "",
-          items: [],
           totalAmount: 0,
         });
+        setOrderInputs({});
       }
     } catch (err) {
       addToast("Lỗi: " + (err.response?.data?.message || err.message || "Không xác định"), "error");
     }
   };
 
-  const handleExportOrder = async (order) => {
-    if (!window.confirm(`Xác nhận xuất kho cho đơn hàng ${order.code}?`)) return;
-    try {
-      setLoading(true);
-
-      // Tìm các phiếu xuất trước của đơn hàng này để trừ đi
-      let orderExportedMap = {};
-      exportsList.forEach(ex => {
-        if (ex.note === `Xuất trước cho đơn hàng: ${order.code}`) {
-          ex.items.forEach(e => {
-            const pid = e.product?._id || e.product;
-            orderExportedMap[pid] = (orderExportedMap[pid] || 0) + e.quantity;
-          });
-        }
-      });
-
-      const exportableItems = order.items.map(it => {
-        if (!it.product) return null;
-        const exported = orderExportedMap[it.product._id] || 0;
-        const remaining = it.quantity - exported;
-        if (remaining <= 0) return null;
-        return {
-          product: it.product._id,
-          quantity: remaining
-        };
-      }).filter(Boolean);
-
-      if (exportableItems.length === 0) {
-        addToast("Đơn hàng này đã được xuất đủ từ trước", "success");
-        await updateOrderStatus(order._id, "Đã xuất thành công");
-        fetchData();
-        return;
-      }
-
-      const exportData = {
-        purpose: "Khác",
-        note: `Xuất kho cho đơn hàng: ${order.code}`,
-        items: exportableItems
-      };
-      
-      await createExport(exportData);
-      try {
-        await updateOrderStatus(order._id, "Đã xuất thành công");
-        addToast("Xuất kho thành công!", "success");
-      } catch {
-        addToast("Tạo phiếu xuất thành công nhưng lỗi cập nhật trạng thái đơn hàng", "warning");
-      }
-    } catch (err) {
-      addToast("Lỗi khi tạo phiếu xuất: " + (err.response?.data?.message || err.message), "error");
-    } finally {
-      fetchData(); // Always refresh data and stop loading
-    }
-  };
-
-  // Xuất trước: xuất đúng số lượng hiện có trong kho (dù chưa đủ)
-  const handlePartialExport = async (order) => {
-    // Tìm các phiếu xuất trước của đơn hàng này để trừ đi
+  const handleOpenExport = (order) => {
     let orderExportedMap = {};
     exportsList.forEach(ex => {
       if (ex.note === `Xuất trước cho đơn hàng: ${order.code}`) {
@@ -230,50 +154,59 @@ export default function OrdersPage() {
       }
     });
 
-    // Tính số lượng có thể xuất thực tế cho mỗi sản phẩm (loại trừ phần đã xuất)
-    const exportableItems = order.items
-      .map(it => {
-        if (!it.product || it.product.quantity <= 0) return null;
+    const exportItems = order.items.map(it => {
+        if (!it.product) return null;
         const exported = orderExportedMap[it.product._id] || 0;
         const remainingToFulfil = it.quantity - exported;
         if (remainingToFulfil <= 0) return null;
-        
-        return {
-          product: it.product._id,
-          quantity: Math.min(remainingToFulfil, it.product.quantity), // chỉ xuất tối đa phần còn thiếu hoặc phần đang có
-          productName: it.product.name,
-          unit: it.product.unit,
-          requested: remainingToFulfil,
-          available: it.product.quantity,
-        };
-      })
-      .filter(Boolean);
 
-    if (exportableItems.length === 0) {
-      addToast("Không có sản phẩm nào còn tồn kho để xuất trước", "warning");
-      return;
+        const stock = it.product.quantity || 0;
+        return {
+           product: it.product._id,
+           productName: it.product.name,
+           unit: it.product.unit,
+           requested: remainingToFulfil,
+           stock,
+           exportQty: remainingToFulfil
+        }
+    }).filter(Boolean);
+
+    if (exportItems.length === 0) {
+       addToast("Đơn hàng này đã được xuất đủ từ trước", "success");
+       return;
     }
 
-    const summary = exportableItems
-      .map(it => `${it.productName}: ${it.quantity}/${it.requested} ${it.unit}`)
-      .join(", ");
+    setExportModal({ order, items: exportItems });
+  };
 
-    if (!window.confirm(`Xuất trước cho đơn ${order.code}?\n${summary}`)) return;
+  const handleConfirmExport = async () => {
+    if (!exportModal) return;
+    const { order, items } = exportModal;
 
+    const validItems = items
+      .filter(it => Number(it.exportQty) > 0)
+      .map(it => ({ product: it.product, quantity: Number(it.exportQty) }));
+
+    if (validItems.length === 0) return addToast("Không có mặt hàng nào để xuất", "error");
+
+    setLoading(true);
     try {
-      setLoading(true);
       const exportData = {
         purpose: "Khác",
         note: `Xuất trước cho đơn hàng: ${order.code}`,
-        items: exportableItems.map(it => ({ product: it.product, quantity: it.quantity }))
+        items: validItems
       };
       await createExport(exportData);
+      
+      const isFull = items.every(it => Number(it.exportQty) >= it.requested);
       try {
-        await updateOrderStatus(order._id, "Đã xuất trước");
-      } catch { /* bỏ qua nếu lỗi cập nhật status */ }
-      addToast(`Đã xuất trước: ${summary}`, "success");
+        await updateOrderStatus(order._id, isFull ? "Đã xuất thành công" : "Đã xuất trước");
+      } catch { /* ignore */ }
+
+      addToast("Xuất kho thành công!", "success");
+      setExportModal(null);
     } catch (err) {
-      addToast("Lỗi khi xuất trước: " + (err.response?.data?.message || err.message), "error");
+      addToast("Lỗi xuất kho: " + (err.response?.data?.message || err.message), "error");
     } finally {
       fetchData();
     }
@@ -295,11 +228,6 @@ export default function OrdersPage() {
 
     if (showPendingOnly) {
       if (o.status === "Đã xuất thành công") return false;
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const orderDateStart = new Date(o.orderDate);
-      orderDateStart.setHours(0, 0, 0, 0);
-      if (orderDateStart.getTime() < todayStart.getTime()) return false;
     }
 
     return matchSearch && matchDate;
@@ -311,29 +239,25 @@ export default function OrdersPage() {
 
   const productDemandMap = {};
   orders.forEach(o => {
+    // Tính cả đơn quá khứ chưa xuất vào bảng tổng hợp
     if (o.status !== "Đã xuất thành công") {
-      const oDate = new Date(o.orderDate);
-      oDate.setHours(0, 0, 0, 0);
-      
-      if (oDate.getTime() >= today.getTime()) {
-        let orderExportedMap = {};
-        exportsList.forEach(ex => {
-          if (ex.note === `Xuất trước cho đơn hàng: ${o.code}`) {
-            ex.items.forEach(e => {
-              const pid = e.product?._id || e.product;
-              orderExportedMap[pid] = (orderExportedMap[pid] || 0) + e.quantity;
-            });
-          }
-        });
+      let orderExportedMap = {};
+      exportsList.forEach(ex => {
+        if (ex.note === `Xuất trước cho đơn hàng: ${o.code}`) {
+          ex.items.forEach(e => {
+            const pid = e.product?._id || e.product;
+            orderExportedMap[pid] = (orderExportedMap[pid] || 0) + e.quantity;
+          });
+        }
+      });
 
-        o.items.forEach(it => {
-          if (it.product && it.product._id) {
-             const exported = orderExportedMap[it.product._id] || 0;
-             const remaining = Math.max(0, it.quantity - exported);
-             productDemandMap[it.product._id] = (productDemandMap[it.product._id] || 0) + remaining;
-          }
-        });
-      }
+      o.items.forEach(it => {
+        if (it.product && it.product._id) {
+           const exported = orderExportedMap[it.product._id] || 0;
+           const remaining = Math.max(0, it.quantity - exported);
+           productDemandMap[it.product._id] = (productDemandMap[it.product._id] || 0) + remaining;
+        }
+      });
     }
   });
 
@@ -466,14 +390,23 @@ export default function OrdersPage() {
             className="btn btn-outline" 
             onClick={() => setShowPendingOnly(!showPendingOnly)}
             style={showPendingOnly ? { borderColor: "var(--primary-color, #4f46e5)", color: "var(--primary-color, #4f46e5)", backgroundColor: "var(--primary-color-light, #e0e7ff)" } : {}}
-            title="Lọc đơn chưa xuất xong và không phải của ngày quá khứ"
+            title="Lọc các đơn hàng chưa xuất xong (bao gồm cả đơn quá hạn)"
           >
             <Filter size={16} /> {showPendingOnly ? "Tất cả đơn" : "Đơn chưa xuất xong"}
           </button>
           <button className="btn btn-outline" onClick={() => setShowSummaryModal(true)}>
             <BarChart2 size={16} /> Bảng Tổng Hợp
           </button>
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+          <button className="btn btn-primary" onClick={() => {
+             setFormData({
+               customerName: "",
+               orderDate: new Date().toISOString().substring(0, 10),
+               note: "",
+               totalAmount: 0,
+             });
+             setOrderInputs({});
+             setShowModal(true);
+          }}>
             <Plus size={16} /> Tạo đơn đặt hàng
           </button>
         </div>
@@ -627,59 +560,16 @@ export default function OrdersPage() {
                       </td>
                       <td>
                         <div style={{ display: "flex", gap: "8px", alignItems: "center", justifyContent: "flex-end", flexWrap: "wrap", minWidth: "220px" }}>
-                          {o.status !== "Đã xuất thành công" && (() => {
-                            // Calculate global exported amount for this order to know real remaining
-                            let orderExportedMap = {};
-                            exportsList.forEach(ex => {
-                              if (ex.note === `Xuất trước cho đơn hàng: ${o.code}`) {
-                                ex.items.forEach(e => {
-                                  const pid = e.product?._id || e.product;
-                                  orderExportedMap[pid] = (orderExportedMap[pid] || 0) + e.quantity;
-                                });
-                              }
-                            });
-
-                            // check if all remaining items are enough in inventory
-                            const allEnough = o.items.every(it => {
-                              if (!it.product) return false;
-                              const exported = orderExportedMap[it.product._id] || 0;
-                              const remaining = it.quantity - exported;
-                              return (it.product.quantity - remaining) >= 0;
-                            });
-
-                            const someAvail = o.items.some(it => {
-                              if (!it.product) return false;
-                              const exported = orderExportedMap[it.product._id] || 0;
-                              const remaining = it.quantity - exported;
-                              return remaining > 0 && it.product.quantity > 0;
-                            });
-
-                            return (
-                              <>
-                                {/* Nút Xuất kho đầy đủ */}
-                                <button
-                                  className="btn btn-sm btn-primary d-flex align-center gap-4"
-                                  title={isExpired ? "Đơn hàng đã qua ngày, không thể xuất." : "Xuất kho đầy đủ cho đơn hàng này"}
-                                  disabled={!allEnough || isExpired}
-                                  onClick={() => handleExportOrder(o)}
-                                >
-                                  <PackagePlus size={14} /> Xuất kho
-                                </button>
-                                {/* Nút Xuất trước: chỉ hiện khi chưa đủ nhưng còn hàng trong kho */}
-                                {!allEnough && someAvail && (
-                                  <button
-                                    className="btn btn-sm btn-outline d-flex align-center gap-4"
-                                    style={{ borderColor: "var(--accent-warning)", color: "var(--accent-warning)", opacity: isExpired ? 0.5 : 1 }}
-                                    title={isExpired ? "Đơn hàng đã qua ngày" : "Xuất phần hàng đang có, phần thiếu sẽ xuất sau"}
-                                    disabled={isExpired}
-                                    onClick={() => handlePartialExport(o)}
-                                  >
-                                    <Zap size={14} /> Xuất trước
-                                  </button>
-                                )}
-                              </>
-                            );
-                          })()}
+                          {o.status !== "Đã xuất thành công" && (
+                             <button
+                               className="btn btn-sm btn-primary d-flex align-center gap-4"
+                               title="Xuất kho cho đơn hàng này"
+                               onClick={() => handleOpenExport(o)}
+                             >
+                               <PackagePlus size={14} /> Xuất kho
+                             </button>
+                          )}
+                          {/* Nút sửa hiển thị cả đơn quá hạn, trừ đơn đã xuất xong */}
                           {o.status !== "Đã xuất thành công" && (
                             <button
                               className="btn btn-icon btn-ghost"
@@ -760,58 +650,47 @@ export default function OrdersPage() {
                   <div className="section-title justify-between mb-16">
                     <span className="d-flex align-center gap-8">
                       <ShoppingCart size={16} className="text-primary" />
-                      Danh sách đặt món
+                      Nhập số lượng hàng
                     </span>
-                    <button type="button" className="btn btn-sm btn-primary" onClick={handleAddItem}>
-                      <Plus size={14} /> Thêm món
-                    </button>
                   </div>
-
-                  {formData.items.length === 0 ? (
-                    <div className="empty-state" style={{ padding: "30px 20px" }}>
-                      <p>Chưa có món nào. Bấm "Thêm món" để thêm.</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {formData.items.map((item, index) => (
-                        <div key={index} className="item-row">
-                          <div className="form-group flex-1">
-                            <label className="form-label">Sản phẩm</label>
-                            <select
-                              required
-                              className="form-select"
-                              value={item.product}
-                              onChange={(e) => handleItemChange(index, "product", e.target.value)}
-                            >
-                              {products.map((p) => (
-                                <option key={p._id} value={p._id}>
-                                  {p.name} - CÒN TỒN: {p.quantity} {p.unit}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="form-group" style={{ width: "120px" }}>
-                            <label className="form-label">Số lượng đặt</label>
-                            <input
-                              type="number"
-                              required
-                              min="1"
-                              className="form-input"
-                              value={item.quantity}
-                              onChange={(e) => handleItemChange(index, "quantity", Number(e.target.value))}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-icon btn-ghost text-danger"
-                            onClick={() => handleRemoveItem(index)}
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="table-wrapper" style={{ maxHeight: "350px", overflowY: "auto" }}>
+                    <table style={{ margin: 0 }}>
+                      <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--card-bg)" }}>
+                        <tr>
+                          <th>TÊN MÓN</th>
+                          <th style={{ width: 140, textAlign: "center" }}>SỐ LƯỢNG ĐẶT</th>
+                          <th style={{ width: 140, textAlign: "center" }}>CÒN TỒN</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products.map((p) => {
+                          const val = orderInputs[p._id]?.quantity || "";
+                          return (
+                            <tr key={p._id}>
+                              <td className="fw-600">{p.name} {p.unit ? `(${p.unit})` : ''}</td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  className="form-input"
+                                  style={{ textAlign: "center", fontWeight: "bold" }}
+                                  value={val}
+                                  onChange={(e) => setOrderInputs(prev => ({
+                                    ...prev,
+                                    [p._id]: { quantity: e.target.value }
+                                  }))}
+                                />
+                              </td>
+                              <td style={{ textAlign: "center", color: "var(--text-muted)" }}>
+                                {p.quantity} {p.unit}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 <div className="grid-2">
@@ -890,58 +769,47 @@ export default function OrdersPage() {
                   <div className="section-title justify-between mb-16">
                     <span className="d-flex align-center gap-8">
                       <ShoppingCart size={16} className="text-primary" />
-                      Danh sách đặt món
+                      Nhập số lượng hàng
                     </span>
-                    <button type="button" className="btn btn-sm btn-primary" onClick={handleAddItem}>
-                      <Plus size={14} /> Thêm món
-                    </button>
                   </div>
-
-                  {formData.items.length === 0 ? (
-                    <div className="empty-state" style={{ padding: "30px 20px" }}>
-                      <p>Chưa có món nào. Bấm "Thêm món" để thêm.</p>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {formData.items.map((item, index) => (
-                        <div key={index} className="item-row">
-                          <div className="form-group flex-1">
-                            <label className="form-label">Sản phẩm</label>
-                            <select
-                              required
-                              className="form-select"
-                              value={item.product}
-                              onChange={(e) => handleItemChange(index, "product", e.target.value)}
-                            >
-                              {products.map((p) => (
-                                <option key={p._id} value={p._id}>
-                                  {p.name} - CÒN TỒN: {p.quantity} {p.unit}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                          <div className="form-group" style={{ width: "120px" }}>
-                            <label className="form-label">Số lượng đặt</label>
-                            <input
-                              type="number"
-                              required
-                              min="1"
-                              className="form-input"
-                              value={item.quantity}
-                              onChange={(e) => handleItemChange(index, "quantity", Number(e.target.value))}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-icon btn-ghost text-danger"
-                            onClick={() => handleRemoveItem(index)}
-                          >
-                            <Trash2 size={18} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
+                  <div className="table-wrapper" style={{ maxHeight: "350px", overflowY: "auto" }}>
+                    <table style={{ margin: 0 }}>
+                      <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--card-bg)" }}>
+                        <tr>
+                          <th>TÊN MÓN</th>
+                          <th style={{ width: 140, textAlign: "center" }}>SỐ LƯỢNG ĐẶT</th>
+                          <th style={{ width: 140, textAlign: "center" }}>CÒN TỒN</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {products.map((p) => {
+                          const val = orderInputs[p._id]?.quantity || "";
+                          return (
+                            <tr key={p._id}>
+                              <td className="fw-600">{p.name} {p.unit ? `(${p.unit})` : ''}</td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder="0"
+                                  className="form-input"
+                                  style={{ textAlign: "center", fontWeight: "bold" }}
+                                  value={val}
+                                  onChange={(e) => setOrderInputs(prev => ({
+                                    ...prev,
+                                    [p._id]: { quantity: e.target.value }
+                                  }))}
+                                />
+                              </td>
+                              <td style={{ textAlign: "center", color: "var(--text-muted)" }}>
+                                {p.quantity} {p.unit}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
 
                 <div className="grid-2">
@@ -974,6 +842,69 @@ export default function OrdersPage() {
               <button type="submit" form="editOrderForm" className="btn btn-primary">
                 Lưu thay đổi
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- Modal Chọn Số Lượng XUẤT KHO --- */}
+      {exportModal && (
+        <div className="modal-overlay">
+          <div className="modal modal-lg">
+            <div className="modal-header">
+              <h3>Xuất kho cho đơn hàng {exportModal.order.code}</h3>
+              <button className="btn btn-icon btn-ghost" onClick={() => setExportModal(null)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Sản phẩm</th>
+                      <th style={{textAlign: "center"}}>Yêu cầu xuất</th>
+                      <th style={{textAlign: "center"}}>Tồn kho</th>
+                      <th style={{textAlign: "center", width: 140}}>Số lượng xuất</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {exportModal.items.map((it, idx) => {
+                      const qty = Number(it.exportQty) || 0;
+                      const exceed = qty > it.stock;
+                      return (
+                        <tr key={idx}>
+                          <td className="fw-600">{it.productName}</td>
+                          <td align="center">{it.requested} {it.unit}</td>
+                          <td align="center">{it.stock} {it.unit}</td>
+                          <td align="center">
+                            <input
+                              type="number"
+                              min="0"
+                              className="form-input"
+                              style={{ textAlign: "center", borderColor: exceed ? "var(--accent-danger)" : "" }}
+                              value={it.exportQty}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setExportModal(prev => {
+                                  const c = {...prev};
+                                  c.items[idx].exportQty = val;
+                                  return c;
+                                });
+                              }}
+                            />
+                            {exceed && (
+                              <div className="text-danger fs-12 mt-4"><AlertTriangle size={12}/> Vượt tồn kho</div>
+                            )}
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setExportModal(null)}>Hủy bỏ</button>
+              <button className="btn btn-primary" onClick={handleConfirmExport}>Xác nhận xuất</button>
             </div>
           </div>
         </div>

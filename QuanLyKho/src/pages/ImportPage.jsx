@@ -12,7 +12,8 @@ export default function ImportPage() {
   const [showModal, setShowModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filterDate, setFilterDate] = useState("");
-  const [form, setForm] = useState({ supplier: "kho 38", note: "", items: [{ product: "", quantity: "", price: "" }] });
+  const [form, setForm] = useState({ supplier: "kho 38", note: "" });
+  const [importInputs, setImportInputs] = useState({});
   const [viewDetails, setViewDetails] = useState(null);
   const toast = useToast();
 
@@ -21,35 +22,38 @@ export default function ImportPage() {
       setLoading(true);
       const [imp, prod] = await Promise.all([getImports(), getProducts()]);
       setImports(imp.data.data);
-      setProducts(prod.data.data);
+      const sortedProds = (prod.data.data || []).sort((a, b) => (a.code || "").localeCompare(b.code || "", undefined, { numeric: true, sensitivity: 'base' }));
+      setProducts(sortedProds);
     } catch { toast("Không thể tải dữ liệu", "error"); }
     finally { setLoading(false); }
   };
   useEffect(() => { fetch(); }, []);
 
-  const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { product: "", quantity: "", price: "" }] }));
-  const removeItem = (i) => setForm((f) => ({ ...f, items: f.items.filter((_, idx) => idx !== i) }));
-  const updateItem = (i, field, val) => setForm((f) => {
-    const items = [...f.items];
-    items[i] = { ...items[i], [field]: val };
-    if (field === "product") {
-      const prod = products.find((p) => p._id === val);
-      if (prod) items[i].price = prod.price;
-    }
-    return { ...f, items };
-  });
-
-  const totalAmount = form.items.reduce((s, it) => s + (it.quantity || 0) * (it.price || 0), 0);
+  const totalAmount = products.reduce((sum, p) => {
+    const qty = Number(importInputs[p._id]?.quantity) || 0;
+    const price = Number(importInputs[p._id]?.price) || 0;
+    return sum + (qty * price);
+  }, 0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.items.some((it) => !it.product)) return toast("Vui lòng chọn sản phẩm cho tất cả dòng", "error");
+    const items = products
+      .filter(p => Number(importInputs[p._id]?.quantity) > 0)
+      .map(p => ({
+        product: p._id,
+        quantity: Number(importInputs[p._id].quantity),
+        price: Number(importInputs[p._id].price) || p.price || 0
+      }));
+
+    if (items.length === 0) return toast("Vui lòng nhập số lượng cho ít nhất 1 sản phẩm", "warning");
+
     setSaving(true);
     try {
-      await createImport(form);
+      await createImport({ ...form, items });
       toast("Tạo phiếu nhập thành công!", "success");
       setShowModal(false);
-      setForm({ supplier: "kho 38", note: "", items: [{ product: "", quantity: "", price: "" }] });
+      setForm({ supplier: "kho 38", note: "" });
+      setImportInputs({});
       fetch();
     } catch (err) { toast(err.response?.data?.message || "Lỗi khi lưu", "error"); }
     finally { setSaving(false); }
@@ -79,7 +83,10 @@ export default function ImportPage() {
       <div className="page-header">
         
         <button className="btn btn-success" onClick={() => {
-          setForm({ supplier: "kho 38", note: "", items: [{ product: "", quantity: "", price: "" }] });
+          setForm({ supplier: "kho 38", note: "" });
+          const initials = {};
+          products.forEach(p => initials[p._id] = { quantity: "", price: p.price || "" });
+          setImportInputs(initials);
           setShowModal(true);
         }}>
           <Plus size={16} /> Tạo phiếu nhập
@@ -159,36 +166,52 @@ export default function ImportPage() {
                       value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
                   </div>
                 </div>
-                <p className="section-title">Danh sách hàng nhập</p>
-                {form.items.map((item, i) => (
-                  <div key={i} className="item-row">
-                    <div className="form-group" style={{ flex: 2 }}>
-                      <label className="form-label">Sản phẩm</label>
-                      <select className="form-select" value={item.product} required
-                        onChange={(e) => updateItem(i, "product", e.target.value)}>
-                        <option value="">-- Chọn sản phẩm --</option>
-                        {products.map((p) => <option key={p._id} value={p._id}>{p.name} ({p.unit})</option>)}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Số lượng</label>
-                      <input className="form-input" type="number" min="1" value={item.quantity}
-                        onChange={(e) => updateItem(i, "quantity", e.target.value === "" ? "" : Number(e.target.value))} />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Đơn giá (₫)</label>
-                      <input className="form-input" type="number" min="0" value={item.price} placeholder="Giá nhập"
-                        onChange={(e) => updateItem(i, "price", e.target.value === "" ? "" : Number(e.target.value))} />
-                    </div>
-                    <button type="button" className="btn btn-danger btn-icon" style={{ marginBottom: 2 }}
-                      onClick={() => removeItem(i)} disabled={form.items.length === 1}>
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-                <button type="button" className="btn btn-ghost mt-8" onClick={addItem}>
-                  <Plus size={14} /> Thêm mặt hàng
-                </button>
+                <p className="section-title">Nhập số lượng hàng</p>
+                <div className="table-wrapper" style={{ maxHeight: "400px", overflowY: "auto" }}>
+                  <table style={{ margin: 0 }}>
+                    <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--card-bg)" }}>
+                      <tr>
+                        <th>TÊN MÓN</th>
+                        <th style={{ width: 120, textAlign: "center" }}>SỐ LƯỢNG</th>
+                        <th style={{ width: 140, textAlign: "center" }}>ĐƠN GIÁ (₫)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {products.map(p => (
+                        <tr key={p._id}>
+                          <td className="fw-600">{p.name} {p.unit ? `(${p.unit})` : ''}</td>
+                          <td>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              className="form-input" 
+                              style={{ textAlign: "center", fontWeight: "bold" }}
+                              placeholder="0"
+                              value={importInputs[p._id]?.quantity || ""}
+                              onChange={(e) => setImportInputs(prev => ({
+                                ...prev,
+                                [p._id]: { ...prev[p._id], quantity: e.target.value }
+                              }))}
+                            />
+                          </td>
+                          <td>
+                            <input 
+                              type="number" 
+                              min="0" 
+                              className="form-input" 
+                              style={{ textAlign: "center" }}
+                              value={importInputs[p._id]?.price === undefined ? (p.price || "") : importInputs[p._id].price}
+                              onChange={(e) => setImportInputs(prev => ({
+                                ...prev,
+                                [p._id]: { ...prev[p._id], price: e.target.value }
+                              }))}
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
                 <div className="d-flex justify-between align-center mt-16" style={{ padding: "12px 16px", background: "var(--bg-primary)", borderRadius: "var(--radius-md)" }}>
                   <span className="fw-600">Tổng tiền nhập:</span>
                   <span className="fw-700 text-success" style={{ fontSize: 18 }}>{totalAmount.toLocaleString("vi-VN")}₫</span>

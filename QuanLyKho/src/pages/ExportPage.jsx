@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, PackageMinus, X, Calendar, Download } from "lucide-react";
+import { Plus, Trash2, PackageMinus, X, Calendar, Download, AlertTriangle } from "lucide-react";
 import { getExports, createExport, deleteExport, getProducts, getOrders, updateOrderStatus } from "../services/api";
 import * as XLSX from "xlsx-js-style";
 import { useToast } from "../components/Toast";
@@ -14,6 +14,8 @@ export default function ExportPage() {
   const [saving, setSaving] = useState(false);
   const [filterDate, setFilterDate] = useState("");
   const [form, setForm] = useState({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: "" }] });
+  // State cho modal điều chỉnh xuất không đủ hàng
+  const [adjustModal, setAdjustModal] = useState(null); // { items: [...], purpose, note }
   const toast = useToast();
 
   const fetch = async () => {
@@ -21,7 +23,8 @@ export default function ExportPage() {
       setLoading(true);
       const [exp, prod] = await Promise.all([getExports(), getProducts()]);
       setExports(exp.data.data);
-      setProducts(prod.data.data);
+      const sortedProds = (prod.data.data || []).sort((a, b) => (a.code || "").localeCompare(b.code || "", undefined, { numeric: true, sensitivity: 'base' }));
+      setProducts(sortedProds);
     } catch { toast("Không thể tải dữ liệu", "error"); }
     finally { setLoading(false); }
   };
@@ -35,12 +38,59 @@ export default function ExportPage() {
     return { ...f, items };
   });
 
+  // Kiểm tra tồn kho trước khi xuất
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (form.items.some((it) => !it.product)) return toast("Vui lòng chọn sản phẩm cho tất cả dòng", "error");
+
+    // Kiểm tra tồn kho từng món
+    const insufficientItems = form.items
+      .map((it) => {
+        const prod = products.find((p) => p._id === it.product);
+        return { ...it, productInfo: prod, stock: prod?.quantity || 0 };
+      })
+      .filter((it) => Number(it.quantity) > it.stock);
+
+    if (insufficientItems.length > 0) {
+      // Hiện modal điều chỉnh
+      const adjustItems = form.items.map((it) => {
+        const prod = products.find((p) => p._id === it.product);
+        const stock = prod?.quantity || 0;
+        const requested = Number(it.quantity) || 0;
+        return {
+          product: it.product,
+          productName: prod?.name || "?",
+          unit: prod?.unit || "",
+          requested,
+          stock,
+          adjustQty: Math.min(requested, stock), // default = tồn kho
+          insufficient: requested > stock,
+        };
+      });
+      setAdjustModal({ items: adjustItems, purpose: form.purpose, note: form.note });
+      return;
+    }
+
+    // Đủ hàng → xuất bình thường
+    await doCreateExport(form.items, form.purpose, form.note);
+  };
+
+  // Xác nhận xuất với số lượng đã điều chỉnh
+  const confirmAdjust = async () => {
+    if (!adjustModal) return;
+    // Lọc bỏ các dòng có adjustQty = 0
+    const validItems = adjustModal.items
+      .filter((it) => Number(it.adjustQty) > 0)
+      .map((it) => ({ product: it.product, quantity: Number(it.adjustQty) }));
+    if (validItems.length === 0) return toast("Không có mặt hàng nào để xuất", "error");
+    await doCreateExport(validItems, adjustModal.purpose, adjustModal.note);
+    setAdjustModal(null);
+  };
+
+  const doCreateExport = async (items, purpose, note) => {
     setSaving(true);
     try {
-      await createExport(form);
+      await createExport({ items, purpose, note });
       toast("Tạo phiếu xuất thành công!", "success");
       setShowModal(false);
       setForm({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: "" }] });
@@ -271,6 +321,77 @@ export default function ExportPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+      {/* --- Modal điều chỉnh số lượng xuất --- */}
+      {adjustModal && (
+        <div className="modal-overlay" onClick={() => setAdjustModal(null)}>
+          <div className="modal modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <AlertTriangle size={18} style={{ color: "var(--warning-color, #f59e0b)" }} />
+                <h3 style={{ margin: 0 }}>Tồn kho không đủ — Điều chỉnh xuất trước</h3>
+              </div>
+              <button className="btn btn-ghost btn-icon" onClick={() => setAdjustModal(null)}><X size={16} /></button>
+            </div>
+            <div className="modal-body">
+              <p style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 16 }}>
+                Một số mặt hàng không đủ tồn kho. Hãy nhập số lượng <strong>xuất trước được</strong> cho từng món (tối đa = tồn kho hiện có). Nhập <strong>0</strong> để bỏ qua món đó.
+              </p>
+              <div className="table-wrapper">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Sản phẩm</th>
+                      <th style={{ textAlign: "center" }}>Đặt</th>
+                      <th style={{ textAlign: "center" }}>Tồn kho</th>
+                      <th style={{ textAlign: "center", width: 140 }}>Xuất trước</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adjustModal.items.map((it, idx) => (
+                      <tr key={idx} style={{ background: it.insufficient ? "rgba(239,68,68,0.06)" : undefined }}>
+                        <td className="fw-600">{it.productName}</td>
+                        <td style={{ textAlign: "center" }}>
+                          <span className="badge badge-info">{it.requested} {it.unit}</span>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <span className={`badge ${it.stock < it.requested ? "badge-danger" : "badge-success"}`}>
+                            {it.stock} {it.unit}
+                          </span>
+                        </td>
+                        <td style={{ textAlign: "center" }}>
+                          <input
+                            className="form-input"
+                            type="number"
+                            min="0"
+                            max={it.stock}
+                            style={{ width: 100, textAlign: "center", fontSize: 15, fontWeight: 700 }}
+                            value={it.adjustQty}
+                            onChange={(e) => {
+                              const val = Math.min(Number(e.target.value), it.stock);
+                              setAdjustModal((prev) => ({
+                                ...prev,
+                                items: prev.items.map((item, i) =>
+                                  i === idx ? { ...item, adjustQty: val < 0 ? 0 : val } : item
+                                ),
+                              }));
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setAdjustModal(null)}>Hủy</button>
+              <button className="btn btn-primary" disabled={saving} onClick={confirmAdjust}>
+                {saving ? "Đang lưu..." : "Xác nhận xuất trước"}
+              </button>
+            </div>
           </div>
         </div>
       )}
