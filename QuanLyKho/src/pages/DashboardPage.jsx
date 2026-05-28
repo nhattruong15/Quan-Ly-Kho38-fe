@@ -51,27 +51,6 @@ export default function DashboardPage() {
 
   if (loading) return <div className="loading-overlay"><div className="spinner" /></div>;
 
-  const kpiCards = [
-    { label: "Tổng sản phẩm", value: stats.totalProducts, icon: Package, color: "primary", sub: "Mặt hàng trong kho" },
-    { label: "Giá trị kho", value: `${(stats.inventoryValue / 1_000_000).toFixed(1)}M₫`, icon: DollarSign, color: "success", sub: "Tổng giá trị tồn kho" },
-    { label: "Phiếu nhập", value: stats.totalImports, icon: PackagePlus, color: "info", sub: "Giao dịch nhập kho" },
-    { label: "Phiếu xuất", value: stats.totalExports, icon: PackageMinus, color: "violet", sub: "Giao dịch xuất kho" },
-    { label: "Cần nhập thêm", value: stats.lowStockProducts, icon: AlertTriangle, color: "danger", sub: "Dưới mức tối thiểu" },
-  ];
-
-  const chartData = (() => {
-    const days = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const label = d.toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-      const imp = stats.recentImports?.find((r) => r._id === label);
-      const exp = stats.recentExports?.find((r) => r._id === label);
-      days.push({ date: label, "Nhập": imp?.count || 0, "Xuất": exp?.count || 0 });
-    }
-    return days;
-  })();
-
   return (
     <div>
       {/* ── KPI Cards ──────────────────────────────── */}

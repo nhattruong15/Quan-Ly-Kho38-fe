@@ -20,16 +20,13 @@ export default function InventoryPage() {
       finally { setLoading(false); }
     };
     fetchData();
-  }, [search]);
+  }, [search, toast]);
 
   const filtered = products.filter((p) => {
     if (filterStatus === "low") return p.quantity <= p.minStock;
     if (filterStatus === "ok") return p.quantity > p.minStock;
     return true;
   });
-
-  const totalValue = products.reduce((s, p) => s + p.quantity * p.price, 0);
-  const lowCount = products.filter((p) => p.quantity <= p.minStock).length;
 
   return (
     <div>
@@ -105,8 +102,6 @@ export default function InventoryPage() {
                 <tbody>
                   {filtered.map((p) => {
                     const isLow = p.quantity <= p.minStock;
-                    const pct = p.minStock > 0 ? Math.min(100, Math.round((p.quantity / p.minStock) * 100)) : 100;
-                    const value = p.quantity * p.price;
                     return (
                       <tr key={p._id}>
                         <td><span className="badge badge-info">{p.code}</span></td>
