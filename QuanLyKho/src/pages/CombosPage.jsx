@@ -64,17 +64,19 @@ export default function CombosPage() {
     setForm({ ...form, items: newItems });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, totalCost) => {
     e.preventDefault();
     if (!form.name.trim()) return toast("Vui lòng nhập tên combo", "error");
     if (form.items.some(it => !it.product)) return toast("Vui lòng chọn sản phẩm cho tất cả thành phần", "error");
 
+    const comboData = { ...form, price: totalCost };
+
     try {
       if (editingCombo) {
-        await updateCombo(editingCombo._id, form);
+        await updateCombo(editingCombo._id, comboData);
         toast("Cập nhật combo thành công!", "success");
       } else {
-        await createCombo(form);
+        await createCombo(comboData);
         toast("Tạo combo mới thành công!", "success");
       }
       setShowModal(false);
@@ -105,6 +107,7 @@ export default function CombosPage() {
       <div className="page-header">
         <div>
           <h2> Quản lý Combo</h2>
+          <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>chưa bao gồm dưa leo, dầu ăn, đậu bắp, bọc nilon = 2k</p>
         </div>
         <button className="btn btn-primary" onClick={openAdd}>
           <Plus size={16} /> Thêm Combo Mới
@@ -139,36 +142,49 @@ export default function CombosPage() {
                 <tr>
                   <th>Tên Combo</th>
                   <th>Thành phần</th>
+                  <th>Giá Cost</th>
                   <th>Ghi chú</th>
                   <th style={{ textAlign: "center" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredCombos.map((c) => (
-                  <tr key={c._id}>
-                    <td><span className="fw-700 text-primary">{c.name}</span></td>
-                    <td>
-                      <div className="d-flex flex-wrap gap-8">
-                        {c.items.map((it, idx) => (
-                          <span key={idx} className="badge badge-info">
-                            {it.product?.name || "SP đã xóa"} x{it.quantity}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="text-muted">{c.description || "—"}</td>
-                    <td>
-                      <div className="d-flex justify-center gap-8">
-                        <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openEdit(c)}>
-                          <Edit size={14} />
-                        </button>
-                        <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDelete(c._id)}>
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {filteredCombos.map((c) => {
+                  const totalCost = c.items.reduce((sum, it) => {
+                    const pPrice = it.product?.price || 0;
+                    return sum + (pPrice * it.quantity);
+                  }, 0);
+
+                  return (
+                    <tr key={c._id}>
+                      <td><span className="fw-700 text-primary">{c.name}</span></td>
+                      <td>
+                        <div className="d-flex flex-wrap gap-8">
+                          {c.items.map((it, idx) => (
+                            <span key={idx} className="badge badge-info">
+                              {it.product?.name || "SP đã xóa"} x{it.quantity}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td>
+                        <span className="fw-700 text-success">
+                          {totalCost.toLocaleString("vi-VN")}₫
+                        </span>
+                      </td>
+                      <td className="text-muted">{c.description || "—"}</td>
+                      <td>
+                        <div className="d-flex justify-center gap-8">
+                          <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openEdit(c)}>
+                            <Edit size={14} />
+                          </button>
+                          <button className="btn btn-danger btn-sm btn-icon" onClick={() => handleDelete(c._id)}>
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           )}
@@ -182,7 +198,13 @@ export default function CombosPage() {
               <h3>{editingCombo ? "✏️ Sửa Combo" : "➕ Thêm Combo Mới"}</h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowModal(false)}><X size={16} /></button>
             </div>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={(e) => {
+              const totalCost = form.items.reduce((sum, it) => {
+                const p = products.find(prod => prod._id === it.product);
+                return sum + ((p?.price || 0) * it.quantity);
+              }, 0);
+              handleSubmit(e, totalCost);
+            }}>
               <div className="modal-body">
                 <div className="grid-form mb-16">
                   <div className="form-group">
@@ -223,7 +245,7 @@ export default function CombosPage() {
                         >
                           <option value="">-- Chọn sản phẩm --</option>
                           {products.map(p => (
-                            <option key={p._id} value={p._id}>{p.name} ({p.unit})</option>
+                            <option key={p._id} value={p._id}>{p.name} ({p.unit}) - {p.price.toLocaleString("vi-VN")}₫</option>
                           ))}
                         </select>
                       </div>
@@ -251,9 +273,20 @@ export default function CombosPage() {
                   ))}
                 </div>
 
-                <button type="button" className="btn btn-ghost mt-16" onClick={addItem}>
-                  <Plus size={14} /> Thêm Sản Phẩm
-                </button>
+                <div className="d-flex justify-between align-center mt-16">
+                  <button type="button" className="btn btn-ghost" onClick={addItem}>
+                    <Plus size={14} /> Thêm Sản Phẩm
+                  </button>
+                  <div className="text-right">
+                    <span className="text-muted" style={{ marginRight: '8px' }}>Tổng giá vốn dự tính:</span>
+                    <span className="fw-700 text-success fs-18">
+                      {form.items.reduce((sum, it) => {
+                        const p = products.find(prod => prod._id === it.product);
+                        return sum + ((p?.price || 0) * it.quantity);
+                      }, 0).toLocaleString("vi-VN")}₫
+                    </span>
+                  </div>
+                </div>
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Hủy</button>
