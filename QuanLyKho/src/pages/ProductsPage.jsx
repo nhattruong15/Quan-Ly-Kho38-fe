@@ -183,7 +183,7 @@ export default function ProductsPage() {
               <thead>
                 <tr>
                   <th>Tên sản phẩm</th>
-                 <th>Giá nhập</th><th>Tồn kho</th><th>Thao tác</th>
+                  <th style={{ width: "160px" }}>Giá nhập</th><th style={{ width: "120px" }}>Tồn kho</th><th style={{ width: "100px" }}>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
@@ -201,7 +201,7 @@ export default function ProductsPage() {
                         )}
                         {p.supplier && <p className="text-muted fs-12">{p.supplier}</p>}
                       </td>
-                      <td className="text-success fw-600">{Number(p.price).toLocaleString("vi-VN")}₫</td>
+                      <td className="text-success fw-600" style={{ textAlign: "left" }}>{Number(p.price).toLocaleString("vi-VN")}₫</td>
                       <td>
                         <span className={`fw-700 ${isLow ? "text-danger" : "text-success"}`}>
                           {p.quantity} {p.unit}

@@ -93,7 +93,7 @@ export default function InventoryPage() {
               <table>
                 <thead>
                   <tr>
-                    <th>Mã SP</th><th>Tên sản phẩm</th>
+                   <th>Tên sản phẩm</th>
                     <th>Tồn kho</th>
                     {/* <th>Mức tồn (%)</th><th>Giá trị</th> */}
                   
@@ -104,7 +104,7 @@ export default function InventoryPage() {
                     const isLow = p.quantity <= p.minStock;
                     return (
                       <tr key={p._id}>
-                        <td><span className="badge badge-info">{p.code}</span></td>
+                      
                         <td>
                           <p className="fw-600 text-primary">{p.name}</p>
                           {p.supplier && <p className="text-muted fs-12">{p.supplier}</p>}
