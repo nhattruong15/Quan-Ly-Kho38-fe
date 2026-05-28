@@ -93,10 +93,8 @@ export default function InventoryPage() {
               <table>
                 <thead>
                   <tr>
-                   <th>Tên sản phẩm</th>
-                    <th>Tồn kho</th>
-                    {/* <th>Mức tồn (%)</th><th>Giá trị</th> */}
-                  
+                    <th>Tên sản phẩm</th>
+                    <th style={{ width: "80px", textAlign: "right" }}>Tồn kho</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -111,7 +109,7 @@ export default function InventoryPage() {
                         </td>
                         {/* <td><span className="badge badge-primary">{p.category}</span></td> */}
                         {/* <td>{p.unit}</td> */}
-                        <td>
+                        <td style={{ textAlign: "right", paddingRight: "16px" }}>
                           <span className={`fw-700 ${isLow ? "text-danger" : "text-success"}`}>
                             {p.quantity}
                           </span>

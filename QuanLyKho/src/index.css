@@ -402,7 +402,7 @@ body {
 
 /* ─── Table ────────────────────────────────────────── */
 .table-wrapper { overflow-x: auto; border-radius: var(--radius-md); border: 1px solid var(--border); }
-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 600px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
 thead { background: var(--bg-secondary); border-bottom: 1px solid var(--border); }
 th {
   padding: 12px 16px; text-align: left;
