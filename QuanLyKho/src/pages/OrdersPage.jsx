@@ -105,10 +105,43 @@ export default function OrdersPage() {
     
     const initials = {};
     order.items.forEach(it => {
-        initials[it.product?._id || it.product] = { quantity: it.quantity };
+        const pid = it.product?._id || it.product;
+        const pDetails = products.find(p => p._id === pid);
+        const quantity = it.quantity;
+        let packs = "";
+        if (pDetails && pDetails.itemsPerPack > 1) {
+            packs = (quantity / pDetails.itemsPerPack).toString();
+        }
+        initials[pid] = { quantity, packs };
     });
     setOrderInputs(initials);
     setShowEditModal(true);
+  };
+
+  const handlePackIncrement = (p) => {
+    const pid = p._id;
+    const currentPacks = Number(orderInputs[pid]?.packs || 0);
+    const newPacks = currentPacks + 1;
+    
+    setOrderInputs(prev => ({
+      ...prev,
+      [pid]: {
+        ...prev[pid],
+        packs: newPacks.toString(),
+        quantity: (newPacks * p.itemsPerPack).toString()
+      }
+    }));
+  };
+
+  const handleClearPacks = (p) => {
+    setOrderInputs(prev => ({
+      ...prev,
+      [p._id]: {
+        ...prev[p._id],
+        packs: "",
+        quantity: ""
+      }
+    }));
   };
 
   const handleUpdate = async (e) => {
@@ -404,7 +437,9 @@ export default function OrdersPage() {
                note: "",
                totalAmount: 0,
              });
-             setOrderInputs({});
+             const initials = {};
+             products.forEach(p => initials[p._id] = { quantity: "", packs: "" });
+             setOrderInputs(initials);
              setShowModal(true);
           }}>
             <Plus size={16} /> Tạo đơn đặt hàng
@@ -658,7 +693,8 @@ export default function OrdersPage() {
                       <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--card-bg)" }}>
                         <tr>
                           <th>TÊN MÓN</th>
-                          <th style={{ width: 140, textAlign: "center" }}>SỐ LƯỢNG ĐẶT</th>
+                          <th style={{ width: 110, textAlign: "center" }}>SỐ GÓI</th>
+                          <th style={{ width: 120, textAlign: "center" }}>SỐ LƯỢNG ĐẶT</th>
                           <th style={{ width: 140, textAlign: "center" }}>CÒN TỒN</th>
                         </tr>
                       </thead>
@@ -667,18 +703,45 @@ export default function OrdersPage() {
                           const val = orderInputs[p._id]?.quantity || "";
                           return (
                             <tr key={p._id}>
-                              <td className="fw-600">{p.name} {p.unit ? `(${p.unit})` : ''}</td>
+                              <td className="fw-600">
+                                <div>{p.name} {p.unit ? `(${p.unit})` : ''}</div>
+                                {p.itemsPerPack > 1 && (
+                                  <div className="text-secondary fs-11 fw-400">1 {p.packUnit} = {p.itemsPerPack} {p.unit}</div>
+                                )}
+                              </td>
+                              <td>
+                                {p.itemsPerPack > 1 ? (
+                                  <div className="pack-btn-container">
+                                    <div 
+                                      className={`pack-btn ${orderInputs[p._id]?.packs ? 'active' : ''}`}
+                                      onClick={() => handlePackIncrement(p)}
+                                    >
+                                      {orderInputs[p._id]?.packs 
+                                        ? `${orderInputs[p._id].packs} ${p.packUnit || 'gói'}`
+                                        : `${p.packUnit || 'gói'}`
+                                      }
+                                    </div>
+                                    {orderInputs[p._id]?.packs && (
+                                      <div className="pack-btn-clear" onClick={(e) => { e.stopPropagation(); handleClearPacks(p); }}>
+                                        <X size={10} />
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div className="text-center text-muted">—</div>
+                                )}
+                              </td>
                               <td>
                                 <input
                                   type="number"
                                   min="0"
-                                  placeholder="0"
+                                  placeholder={p.unit}
                                   className="form-input"
                                   style={{ textAlign: "center", fontWeight: "bold" }}
                                   value={val}
                                   onChange={(e) => setOrderInputs(prev => ({
                                     ...prev,
-                                    [p._id]: { quantity: e.target.value }
+                                    [p._id]: { ...prev[p._id], quantity: e.target.value }
                                   }))}
                                 />
                               </td>
@@ -777,7 +840,8 @@ export default function OrdersPage() {
                       <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--card-bg)" }}>
                         <tr>
                           <th>TÊN MÓN</th>
-                          <th style={{ width: 140, textAlign: "center" }}>SỐ LƯỢNG ĐẶT</th>
+                          <th style={{ width: 110, textAlign: "center" }}>SỐ GÓI</th>
+                          <th style={{ width: 120, textAlign: "center" }}>SỐ LƯỢNG ĐẶT</th>
                           <th style={{ width: 140, textAlign: "center" }}>CÒN TỒN</th>
                         </tr>
                       </thead>
@@ -786,18 +850,45 @@ export default function OrdersPage() {
                           const val = orderInputs[p._id]?.quantity || "";
                           return (
                             <tr key={p._id}>
-                              <td className="fw-600">{p.name} {p.unit ? `(${p.unit})` : ''}</td>
+                              <td className="fw-600">
+                                <div>{p.name} {p.unit ? `(${p.unit})` : ''}</div>
+                                {p.itemsPerPack > 1 && (
+                                  <div className="text-secondary fs-11 fw-400">1 {p.packUnit} = {p.itemsPerPack} {p.unit}</div>
+                                )}
+                              </td>
                               <td>
                                 <input
                                   type="number"
                                   min="0"
-                                  placeholder="0"
+                                  placeholder={p.itemsPerPack > 1 ? p.packUnit : "—"}
+                                  className="form-input"
+                                  style={{ textAlign: "center", backgroundColor: p.itemsPerPack > 1 ? "rgba(79, 70, 229, 0.05)" : "transparent" }}
+                                  disabled={p.itemsPerPack <= 1}
+                                  value={orderInputs[p._id]?.packs || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setOrderInputs(prev => ({
+                                      ...prev,
+                                      [p._id]: { 
+                                        ...prev[p._id], 
+                                        packs: val,
+                                        quantity: val ? (Number(val) * p.itemsPerPack).toString() : prev[p._id].quantity
+                                      }
+                                    }));
+                                  }}
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  placeholder={p.unit}
                                   className="form-input"
                                   style={{ textAlign: "center", fontWeight: "bold" }}
                                   value={val}
                                   onChange={(e) => setOrderInputs(prev => ({
                                     ...prev,
-                                    [p._id]: { quantity: e.target.value }
+                                    [p._id]: { ...prev[p._id], quantity: e.target.value }
                                   }))}
                                 />
                               </td>

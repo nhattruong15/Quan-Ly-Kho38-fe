@@ -31,66 +31,77 @@ export default function LoginPage() {
 
   return (
     <div
+      className="vibrant-gradient"
       style={{
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "var(--bg-primary)",
         padding: "20px",
+        overflow: "hidden",
+        position: "relative",
       }}
     >
+      {/* Background Blobs */}
+      <div className="login-blob animate-float" style={{ top: "-10%", left: "-10%", background: "radial-gradient(circle, rgba(255, 61, 104, 0.2) 0%, transparent 70%)" }} />
+      <div className="login-blob animate-float-delayed" style={{ bottom: "-10%", right: "-10%", background: "radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, transparent 70%)" }} />
+      <div className="login-blob animate-float" style={{ top: "40%", right: "15%", width: "300px", height: "300px", background: "radial-gradient(circle, rgba(255, 209, 49, 0.15) 0%, transparent 70%)" }} />
+
       <div
+        className="glass-card"
         style={{
-          background: "var(--bg-card)",
-          borderRadius: "20px",
+          borderRadius: "24px",
           padding: "48px 40px",
           width: "100%",
           maxWidth: "420px",
-          boxShadow: "0 20px 60px rgba(0,0,0,0.3)",
-          border: "1px solid var(--border-color)",
+          position: "relative",
+          zIndex: 10,
         }}
       >
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: "36px" }}>
           <div
+            className="animate-float"
             style={{
-              width: "64px",
-              height: "64px",
-              borderRadius: "16px",
-              background: "var(--accent-primary)",
+              width: "80px",
+              height: "80px",
+              borderRadius: "24px",
+              background: "linear-gradient(135deg, #FF3D68 0%, #FF8E3C 100%)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              margin: "0 auto 16px",
-              boxShadow: "0 4px 20px rgba(var(--accent-primary-rgb), 0.4)",
+              margin: "0 auto 20px",
+              boxShadow: "0 8px 32px rgba(255, 61, 104, 0.4)",
             }}
           >
-            <ChefHat size={32} color="#020c1b" />
+            <ChefHat size={40} color="white" strokeWidth={2.5} />
           </div>
           <h1
             style={{
-              fontSize: "30px",
-              fontWeight: 700,
-              color: "var(--text-primary)",
+              fontSize: "32px",
+              fontWeight: 800,
+              color: "white",
               margin: 0,
+              letterSpacing: "-0.02em",
+              textShadow: "0 2px 10px rgba(0,0,0,0.2)",
             }}
           >
-            Kho Cháo 38
+            Ăn Vặt Nhà Mơ
           </h1>
-          
+         
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
           {error && (
             <div
               style={{
-                background: "rgba(239,68,68,0.1)",
+                background: "rgba(239,68,68,0.2)",
                 border: "1px solid rgba(239,68,68,0.3)",
-                borderRadius: "8px",
-                padding: "10px 14px",
-                color: "var(--accent-danger)",
+                borderRadius: "12px",
+                padding: "12px 16px",
+                color: "#ff8a8a",
                 fontSize: "14px",
+                backdropFilter: "blur(4px)",
               }}
             >
               {error}
@@ -98,7 +109,7 @@ export default function LoginPage() {
           )}
 
           <div className="form-group">
-            <label className="form-label">Tên đăng nhập</label>
+            <label className="form-label" style={{ color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>Tên đăng nhập</label>
             <input
               className="form-input"
               type="text"
@@ -107,11 +118,17 @@ export default function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               required
               autoFocus
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                color: "white",
+                borderRadius: "12px",
+              }}
             />
           </div>
 
           <div className="form-group">
-            <label className="form-label">Mật khẩu</label>
+            <label className="form-label" style={{ color: "rgba(255,255,255,0.9)", fontWeight: 600 }}>Mật khẩu</label>
             <div style={{ position: "relative" }}>
               <input
                 className="form-input"
@@ -120,7 +137,13 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                style={{ paddingRight: "44px" }}
+                style={{
+                  paddingRight: "44px",
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  color: "white",
+                  borderRadius: "12px",
+                }}
               />
               <button
                 type="button"
@@ -133,9 +156,9 @@ export default function LoginPage() {
                   background: "none",
                   border: "none",
                   cursor: "pointer",
-                  color: "var(--text-muted)",
+                  color: "rgba(255,255,255,0.5)",
                   display: "flex",
-                  padding: 0,
+                  padding: 10,
                 }}
               >
                 {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -145,18 +168,35 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="btn btn-primary"
             disabled={loading}
             style={{
-              marginTop: "8px",
-              padding: "14px",
+              marginTop: "12px",
+              padding: "16px",
               fontSize: "16px",
-              fontWeight: 600,
-              gap: "8px",
+              fontWeight: 700,
+              gap: "10px",
+              background: "linear-gradient(135deg, #FF3D68 0%, #FF8E3C 100%)",
+              color: "white",
+              border: "none",
+              borderRadius: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 10px 25px -5px rgba(255, 61, 104, 0.4)",
+              transition: "all 0.3s ease",
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.transform = "translateY(-2px)";
+              e.currentTarget.style.boxShadow = "0 15px 30px -5px rgba(255, 61, 104, 0.5)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.transform = "translateY(0)";
+              e.currentTarget.style.boxShadow = "0 10px 25px -5px rgba(255, 61, 104, 0.4)";
             }}
           >
-            <LogIn size={18} />
-            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            
+            {loading ? "Đang xử lý..." : "Đăng nhập ngay"}
           </button>
         </form>
       </div>

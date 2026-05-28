@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Plus, Trash2, PackageMinus, X, Calendar, Download, AlertTriangle } from "lucide-react";
-import { getExports, createExport, deleteExport, getProducts, getOrders, updateOrderStatus } from "../services/api";
+import { Plus, Trash2, PackageMinus, X, Calendar, Download, AlertTriangle, Settings2 } from "lucide-react";
+import { getExports, createExport, deleteExport, getProducts, getOrders, updateOrderStatus, getCombos } from "../services/api";
 import * as XLSX from "xlsx-js-style";
 import { useToast } from "../components/Toast";
 
@@ -9,11 +9,16 @@ const PURPOSES = ["Bếp chính", "Bếp phụ", "Kiểm kê", "Hủy hàng", "K
 export default function ExportPage() {
   const [exports, setExports] = useState([]);
   const [products, setProducts] = useState([]);
+  const [combos, setCombos] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
+  const [exportMode, setExportMode] = useState("single"); // "single" | "combo"
+  const [selectedCombo, setSelectedCombo] = useState("");
+  const [comboQty, setComboQty] = useState(1);
   const [saving, setSaving] = useState(false);
   const [filterDate, setFilterDate] = useState("");
   const [form, setForm] = useState({ purpose: "Bếp chính", note: "", items: [{ product: "", quantity: "" }] });
+  
   // State cho modal điều chỉnh xuất không đủ hàng
   const [adjustModal, setAdjustModal] = useState(null); // { items: [...], purpose, note }
   const toast = useToast();
@@ -21,13 +26,15 @@ export default function ExportPage() {
   const fetch = async () => {
     try {
       setLoading(true);
-      const [exp, prod] = await Promise.all([getExports(), getProducts()]);
+      const [exp, prod, comboRes] = await Promise.all([getExports(), getProducts(), getCombos()]);
       setExports(exp.data.data);
       const sortedProds = (prod.data.data || []).sort((a, b) => (a.code || "").localeCompare(b.code || "", undefined, { numeric: true, sensitivity: 'base' }));
       setProducts(sortedProds);
+      setCombos(comboRes.data.data || []);
     } catch { toast("Không thể tải dữ liệu", "error"); }
     finally { setLoading(false); }
   };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetch(); }, []);
 
   const addItem = () => setForm((f) => ({ ...f, items: [...f.items, { product: "", quantity: "" }] }));
@@ -41,22 +48,37 @@ export default function ExportPage() {
   // Kiểm tra tồn kho trước khi xuất
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (form.items.some((it) => !it.product)) return toast("Vui lòng chọn sản phẩm cho tất cả dòng", "error");
+    
+    let itemsToExport = [];
+
+    if (exportMode === "combo") {
+      if (!selectedCombo) return toast("Vui lòng chọn combo", "error");
+      const combo = combos.find(c => c._id === selectedCombo);
+      if (!combo) return toast("Combo không tồn tại", "error");
+      
+      itemsToExport = combo.items.map(it => ({
+        product: it.product._id || it.product,
+        quantity: it.quantity * comboQty
+      }));
+    } else {
+      if (form.items.some((it) => !it.product)) return toast("Vui lòng chọn sản phẩm cho tất cả dòng", "error");
+      itemsToExport = form.items.map(it => ({ product: it.product, quantity: Number(it.quantity) }));
+    }
 
     // Kiểm tra tồn kho từng món
-    const insufficientItems = form.items
+    const insufficientItems = itemsToExport
       .map((it) => {
         const prod = products.find((p) => p._id === it.product);
         return { ...it, productInfo: prod, stock: prod?.quantity || 0 };
       })
-      .filter((it) => Number(it.quantity) > it.stock);
+      .filter((it) => it.quantity > it.stock);
 
     if (insufficientItems.length > 0) {
       // Hiện modal điều chỉnh
-      const adjustItems = form.items.map((it) => {
+      const adjustItems = itemsToExport.map((it) => {
         const prod = products.find((p) => p._id === it.product);
         const stock = prod?.quantity || 0;
-        const requested = Number(it.quantity) || 0;
+        const requested = it.quantity;
         return {
           product: it.product,
           productName: prod?.name || "?",
@@ -72,7 +94,7 @@ export default function ExportPage() {
     }
 
     // Đủ hàng → xuất bình thường
-    await doCreateExport(form.items, form.purpose, form.note);
+    await doCreateExport(itemsToExport, form.purpose, form.note);
   };
 
   // Xác nhận xuất với số lượng đã điều chỉnh
@@ -270,6 +292,25 @@ export default function ExportPage() {
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body">
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '20px', background: 'var(--bg-secondary)', padding: '4px', borderRadius: '8px' }}>
+                  <button 
+                    type="button" 
+                    className={`btn ${exportMode === 'single' ? 'btn-primary' : 'btn-ghost'}`} 
+                    style={{ flex: 1, height: '36px' }}
+                    onClick={() => setExportMode('single')}
+                  >
+                    Xuất lẻ
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`btn ${exportMode === 'combo' ? 'btn-primary' : 'btn-ghost'}`} 
+                    style={{ flex: 1, height: '36px' }}
+                    onClick={() => setExportMode('combo')}
+                  >
+                    Xuất combo
+                  </button>
+                </div>
+
                 <div className="grid-form mb-24">
                   <div className="form-group">
                     <label className="form-label">Mục đích xuất *</label>
@@ -284,35 +325,104 @@ export default function ExportPage() {
                       value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} />
                   </div>
                 </div>
-                <p className="section-title">Danh sách hàng xuất</p>
-                {form.items.map((item, i) => (
-                  <div key={i} className="item-row">
-                    <div className="form-group" style={{ flex: 2 }}>
-                      <label className="form-label">Sản phẩm</label>
-                      <select className="form-select" value={item.product} required
-                        onChange={(e) => updateItem(i, "product", e.target.value)}>
-                        <option value="">-- Chọn sản phẩm --</option>
-                        {products.map((p) => (
-                          <option key={p._id} value={p._id}>
-                            {p.name} (Còn: {p.quantity} {p.unit})
-                          </option>
-                        ))}
-                      </select>
+
+                {exportMode === "combo" ? (
+                  <div style={{ background: 'var(--bg-secondary)', padding: '16px', borderRadius: '12px' }}>
+                    <div className="grid-form">
+                      <div className="form-group">
+                        <label className="form-label">Chọn Combo *</label>
+                        <select 
+                          className="form-select" 
+                          value={selectedCombo} 
+                          onChange={(e) => setSelectedCombo(e.target.value)}
+                          required
+                        >
+                          <option value="">-- Chọn combo --</option>
+                          {combos.map(c => (
+                            <option key={c._id} value={c._id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Số lượng Combo *</label>
+                        <input 
+                          type="number" 
+                          min="0"
+                          step="any"
+                          className="form-input" 
+                          value={comboQty} 
+                          onChange={(e) => setComboQty(Number(e.target.value))}
+                          required
+                        />
+                      </div>
                     </div>
-                    <div className="form-group">
-                      <label className="form-label">Số lượng</label>
-                      <input className="form-input" type="number" min="1" value={item.quantity}
-                        onChange={(e) => updateItem(i, "quantity", e.target.value === "" ? "" : Number(e.target.value))} />
-                    </div>
-                    <button type="button" className="btn btn-danger btn-icon" style={{ marginBottom: 2 }}
-                      onClick={() => removeItem(i)} disabled={form.items.length === 1}>
-                      <X size={14} />
-                    </button>
+                    {selectedCombo && (
+                      <div style={{ marginTop: '16px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                          <p className="fw-600 mb-0">Thành phần combo này sẽ được xuất:</p>
+                          <button 
+                            type="button" 
+                            className="btn btn-ghost btn-sm" 
+                            style={{ height: '28px', fontSize: '11px', gap: '4px' }}
+                            onClick={() => {
+                              const combo = combos.find(c => c._id === selectedCombo);
+                              if (!combo) return;
+                              const expandedItems = combo.items.map(it => ({
+                                product: it.product._id || it.product,
+                                quantity: it.quantity * comboQty
+                              }));
+                              setForm({ ...form, items: expandedItems });
+                              setExportMode("single");
+                              setSelectedCombo("");
+                              toast("Đã chuyển sang chế độ tùy chỉnh lẻ", "info");
+                            }}
+                          >
+                            <Settings2 size={13} /> Tùy chỉnh thành phần
+                          </button>
+                        </div>
+                        <div className="d-flex flex-wrap gap-8">
+                          {combos.find(c => c._id === selectedCombo)?.items.map((it, idx) => (
+                            <span key={idx} className="badge badge-info shadow-sm">
+                              {it.product?.name}: {it.quantity * comboQty} {it.product?.unit}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                ))}
-                <button type="button" className="btn btn-ghost mt-8" onClick={addItem}>
-                  <Plus size={14} /> Thêm mặt hàng
-                </button>
+                ) : (
+                  <>
+                    <p className="section-title">Danh sách hàng xuất lẻ</p>
+                    {form.items.map((item, i) => (
+                      <div key={i} className="item-row">
+                        <div className="form-group" style={{ flex: 2 }}>
+                          <label className="form-label">Sản phẩm</label>
+                          <select className="form-select" value={item.product} required
+                            onChange={(e) => updateItem(i, "product", e.target.value)}>
+                            <option value="">-- Chọn sản phẩm --</option>
+                            {products.map((p) => (
+                              <option key={p._id} value={p._id}>
+                                {p.name} (Còn: {p.quantity} {p.unit})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Số lượng</label>
+                          <input className="form-input" type="number" min="0" step="any" value={item.quantity}
+                            onChange={(e) => updateItem(i, "quantity", e.target.value === "" ? "" : Number(e.target.value))} />
+                        </div>
+                        <button type="button" className="btn btn-danger btn-icon" style={{ marginBottom: 2 }}
+                          onClick={() => removeItem(i)} disabled={form.items.length === 1}>
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                    <button type="button" className="btn btn-ghost mt-8" onClick={addItem}>
+                      <Plus size={14} /> Thêm mặt hàng
+                    </button>
+                  </>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowModal(false)}>Hủy</button>

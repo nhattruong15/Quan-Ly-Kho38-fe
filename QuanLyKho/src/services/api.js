@@ -73,6 +73,13 @@ export const deleteCustomer = (id) => api.delete(`/customers/${id}`);
 // ─── Auth ─────────────────────────────────────────────────
 export const loginApi = (data) => api.post("/auth/login", data);
 
+// ─── Combos ─────────────────────────────────────────────
+export const getCombos = () => api.get("/combos");
+export const getComboById = (id) => api.get(`/combos/${id}`);
+export const createCombo = (data) => api.post("/combos", data);
+export const updateCombo = (id, data) => api.put(`/combos/${id}`, data);
+export const deleteCombo = (id) => api.delete(`/combos/${id}`);
+
 // ─── Appointments ──────────────────────────────────────────
 export const getAppointments = (params) => api.get("/appointments", { params });
 export const createAppointment = (data) => api.post("/appointments", data);

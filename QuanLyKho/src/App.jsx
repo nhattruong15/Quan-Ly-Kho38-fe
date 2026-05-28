@@ -14,6 +14,7 @@ import CustomersPage from "./pages/CustomersPage";
 import LoginPage from "./pages/LoginPage";
 import CalendarPage from "./pages/CalendarPage";
 import AppointmentsPage from "./pages/AppointmentsPage";
+import CombosPage from "./pages/CombosPage";
 
 // ─── Auth Guard ───────────────────────────────────────────
 function RequireAuth({ children }) {
@@ -50,6 +51,7 @@ function AppLayout() {
             <Route path="/imports" element={<ImportPage />} />
             <Route path="/exports" element={<ExportPage />} />
             <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/combos" element={<CombosPage />} />
             <Route path="/appointments" element={<AppointmentsPage />} />
             <Route path="/calendar" element={<CalendarPage />} />
             <Route path="/customers" element={<CustomersPage />} />

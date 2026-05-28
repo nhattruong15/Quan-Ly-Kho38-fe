@@ -3,7 +3,7 @@ import { NavLink, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Package, PackagePlus, PackageMinus,
   Boxes, BarChart3, Warehouse, ChefHat, X, ShoppingCart, Users, LogOut,
-  ChevronDown, ChevronRight, CalendarDays, Calendar
+  ChevronDown, ChevronRight, CalendarDays, Calendar, Layers
 } from "lucide-react";
 
 const navItems = [
@@ -20,16 +20,17 @@ const navItems = [
         { to: "/inventory", label: "Tồn kho", icon: Boxes },
         { to: "/imports", label: "Phiếu nhập kho", icon: PackagePlus },
         { to: "/exports", label: "Phiếu xuất kho", icon: PackageMinus },
-        { to: "/orders", label: "Đơn đặt hàng", icon: ShoppingCart },
+        // { to: "/orders", label: "Đơn đặt hàng", icon: ShoppingCart },
+        { to: "/combos", label: "Quản lý Combo", icon: Layers },
         // { to: "/calendar", label: "Lịch đơn hàng", icon: CalendarDays },
-        { to: "/customers", label: "Khách hàng", icon: Users },
+        // { to: "/customers", label: "Khách hàng", icon: Users },
       ]
     },
   ]},
-  { section: "Phân tích", items: [
-    { to: "/appointments", label: "Đơn hẹn", icon: Calendar },
-    { to: "/reports", label: "Báo cáo", icon: BarChart3 },
-  ]},
+  // { section: "Phân tích", items: [
+  //   { to: "/appointments", label: "Đơn hẹn", icon: Calendar },
+  //   { to: "/reports", label: "Báo cáo", icon: BarChart3 },
+  // ]},
 ];
 
 export default function Sidebar({ open, onClose }) {
@@ -73,8 +74,7 @@ export default function Sidebar({ open, onClose }) {
             <ChefHat size={20} color="#020c1b" />
           </div>
           <div className="sidebar-logo-text">
-            <h2>Kho Cháo 38</h2>
-            <span>Quản lý nhập xuất kho</span>
+            <h2>ĂN VẶT NHÀ MƠ</h2>
           </div>
           {/* Close button — visible on mobile */}
           <button className="sidebar-close-btn" onClick={onClose} aria-label="Đóng menu">

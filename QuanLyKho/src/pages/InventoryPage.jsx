@@ -99,7 +99,7 @@ export default function InventoryPage() {
                     <th>Mã SP</th><th>Tên sản phẩm</th>
                     <th>Tồn kho</th>
                     {/* <th>Mức tồn (%)</th><th>Giá trị</th> */}
-                    <th>Trạng thái</th>
+                  
                   </tr>
                 </thead>
                 <tbody>
@@ -136,11 +136,7 @@ export default function InventoryPage() {
                           </div>
                         </td> */}
                         {/* <td className="fw-600 text-success">{value.toLocaleString("vi-VN")}₫</td> */}
-                        <td>
-                          {isLow
-                            ? <span className="badge badge-danger">⚠ Cạn hàng</span>
-                            : <span className="badge badge-success">✓ Đủ hàng</span>}
-                        </td>
+                       
                       </tr>
                     );
                   })}

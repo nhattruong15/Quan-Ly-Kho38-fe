@@ -7,7 +7,7 @@ import {
 import { useToast } from "../components/Toast";
 
 const UNITS = ["kg", "g", "lít", "ml", "cái", "túi", "gói", "hộp", "chai", "thùng", "bó", "bịch", "phần", "ly"];
-const emptyProduct = { name: "", code: "", category: "", unit: "kg", price: "", quantity: 0, minStock: "", description: "", supplier: "" };
+const emptyProduct = { name: "", code: "", category: "", unit: "kg", price: "", quantity: 0, itemsPerPack: 1, packUnit: "gói", minStock: "", description: "", supplier: "" };
 
 export default function ProductsPage() {
   const [products, setProducts] = useState([]);
@@ -19,8 +19,10 @@ export default function ProductsPage() {
   
   const [showModal, setShowModal] = useState(false);
   const [showCatModal, setShowCatModal] = useState(false);
+  const [showDetailModal, setShowDetailModal] = useState(false);
   
   const [editItem, setEditItem] = useState(null);
+  const [selectedProduct, setSelectedProduct] = useState(null);
   const [form, setForm] = useState(emptyProduct);
   const [saving, setSaving] = useState(false);
 
@@ -89,6 +91,11 @@ export default function ProductsPage() {
       toast("Đã xóa sản phẩm", "success");
       fetchProducts();
     } catch (err) { toast(err.response?.data?.message || "Lỗi khi xóa", "error"); }
+  };
+
+  const openDetail = (p) => {
+    setSelectedProduct(p);
+    setShowDetailModal(true);
   };
 
   // Category Handlers
@@ -175,36 +182,34 @@ export default function ProductsPage() {
             <table>
               <thead>
                 <tr>
-                  <th>Mã SP</th><th>Tên sản phẩm</th><th>Danh mục</th>
-                  <th>Đơn vị</th><th>Giá nhập</th><th>Tồn kho</th><th>Trạng thái</th><th>Thao tác</th>
+                  <th>Tên sản phẩm</th>
+                 <th>Giá nhập</th><th>Tồn kho</th><th>Thao tác</th>
                 </tr>
               </thead>
               <tbody>
                 {products.map((p) => {
                   const isLow = p.quantity <= p.minStock;
                   return (
-                    <tr key={p._id}>
-                      <td><span className="badge badge-info">{p.code}</span></td>
+                    <tr key={p._id} onClick={() => openDetail(p)} style={{ cursor: "pointer" }}>
+                    
                       <td>
                         <p className="fw-600 text-primary">{p.name}</p>
+                        {p.itemsPerPack > 1 && (
+                          <p className="text-secondary fs-12" style={{ fontStyle: "italic" }}>
+                            Quy cách: 1 {p.packUnit || "gói"} = {p.itemsPerPack} {p.unit}
+                          </p>
+                        )}
                         {p.supplier && <p className="text-muted fs-12">{p.supplier}</p>}
                       </td>
-                      <td><span className="badge badge-primary">{p.category}</span></td>
-                      <td>{p.unit}</td>
                       <td className="text-success fw-600">{Number(p.price).toLocaleString("vi-VN")}₫</td>
                       <td>
                         <span className={`fw-700 ${isLow ? "text-danger" : "text-success"}`}>
                           {p.quantity} {p.unit}
                         </span>
                       </td>
+                     
                       <td>
-                        {isLow
-                          ? <span className="badge badge-danger">⚠ Cạn hàng</span>
-                          : <span className="badge badge-success">✓ Đủ hàng</span>
-                        }
-                      </td>
-                      <td>
-                        <div className="d-flex gap-8">
+                        <div className="d-flex gap-8" onClick={(e) => e.stopPropagation()}>
                           <button className="btn btn-ghost btn-sm btn-icon" onClick={() => openEdit(p)} title="Sửa">
                             <Pencil size={13} />
                           </button>
@@ -251,12 +256,22 @@ export default function ProductsPage() {
                       {categories.map((c) => <option key={c._id} value={c.name}>{c.name}</option>)}
                     </select>
                   </div>
-                  <div className="form-group">
+                   <div className="form-group">
                     <label className="form-label">Đơn vị *</label>
                     <select className="form-select" value={form.unit} required
                       onChange={(e) => setForm({ ...form, unit: e.target.value })}>
                       {UNITS.map((u) => <option key={u} value={u}>{u}</option>)}
                     </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Tên bộ/gói (Quy cách)</label>
+                    <input className="form-input" placeholder="VD: bịch, thùng, hộp..."
+                      value={form.packUnit} onChange={(e) => setForm({ ...form, packUnit: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Số lượng lẻ trong 1 gói</label>
+                    <input className="form-input" type="number" min="1" placeholder="VD: 10 (nếu 1 bịch có 10 cái)"
+                      value={form.itemsPerPack} onChange={(e) => setForm({ ...form, itemsPerPack: Number(e.target.value) })} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Giá nhập (₫) *</label>
@@ -354,6 +369,83 @@ export default function ProductsPage() {
             </div>
             <div className="modal-footer">
               <button type="button" className="btn btn-primary" onClick={() => setShowCatModal(false)}>Xong</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── PRODUCT DETAIL MODAL ────────────────────────────────── */}
+      {showDetailModal && selectedProduct && (
+        <div className="modal-overlay" onClick={() => setShowDetailModal(false)}>
+          <div className="modal" style={{ maxWidth: 500 }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Chi tiết sản phẩm</h3>
+              <button type="button" className="btn btn-ghost btn-icon" onClick={() => setShowDetailModal(false)}><X size={18} /></button>
+            </div>
+            <div className="modal-body">
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div>
+                  <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Tên sản phẩm</label>
+                  <p style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>{selectedProduct.name}</p>
+                </div>
+                
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div>
+                    <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Mã hàng</label>
+                    <p className="fw-600">{selectedProduct.code || "---"}</p>
+                  </div>
+                  <div>
+                    <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Danh mục</label>
+                    <p className="fw-600">{selectedProduct.category}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Quy cách</label>
+                  <p className="fw-600">
+                    {selectedProduct.itemsPerPack > 1 
+                      ? `1 ${selectedProduct.packUnit || "gói"} = ${selectedProduct.itemsPerPack} ${selectedProduct.unit}`
+                      : `Bán lẻ theo ${selectedProduct.unit}`
+                    }
+                  </p>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                  <div>
+                    <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Giá nhập</label>
+                    <p className="text-success fw-800" style={{ fontSize: 17 }}>{Number(selectedProduct.price).toLocaleString("vi-VN")}₫</p>
+                  </div>
+                  <div>
+                    <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Tồn kho hiện tại</label>
+                    <p className={`fw-800`} style={{ fontSize: 17, color: selectedProduct.quantity <= selectedProduct.minStock ? "var(--accent-danger)" : "var(--accent-success)" }}>
+                      {selectedProduct.quantity} {selectedProduct.unit}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Nhà cung cấp</label>
+                  <p className="fw-600">{selectedProduct.supplier || "Chưa xác định"}</p>
+                </div>
+
+                <div>
+                  <label className="form-label text-muted" style={{ display: "block", marginBottom: 4 }}>Ghi chú</label>
+                  <div style={{ 
+                    padding: "12px", 
+                    background: "var(--bg-primary)", 
+                    borderRadius: "8px", 
+                    border: "1px solid var(--border)",
+                    minHeight: "60px",
+                    color: selectedProduct.description ? "var(--text-secondary)" : "var(--text-muted)",
+                    fontSize: 13,
+                    lineHeight: 1.5
+                  }}>
+                    {selectedProduct.description || "Không có ghi chú nào cho sản phẩm này."}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-primary" onClick={() => setShowDetailModal(false)}>Đóng</button>
             </div>
           </div>
         </div>

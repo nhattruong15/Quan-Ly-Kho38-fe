@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { Plus, Trash2, PackagePlus, X, Calendar, Eye } from "lucide-react";
 import { getImports, createImport, deleteImport, getProducts } from "../services/api";
 import { useToast } from "../components/Toast";
@@ -17,7 +17,7 @@ export default function ImportPage() {
   const [viewDetails, setViewDetails] = useState(null);
   const toast = useToast();
 
-  const fetch = async () => {
+  const fetch = useCallback(async () => {
     try {
       setLoading(true);
       const [imp, prod] = await Promise.all([getImports(), getProducts()]);
@@ -26,8 +26,8 @@ export default function ImportPage() {
       setProducts(sortedProds);
     } catch { toast("Không thể tải dữ liệu", "error"); }
     finally { setLoading(false); }
-  };
-  useEffect(() => { fetch(); }, []);
+  }, [toast]);
+  useEffect(() => { fetch(); }, [fetch]);
 
   const totalAmount = products.reduce((sum, p) => {
     const qty = Number(importInputs[p._id]?.quantity) || 0;
@@ -85,7 +85,7 @@ export default function ImportPage() {
         <button className="btn btn-success" onClick={() => {
           setForm({ supplier: "kho 38", note: "" });
           const initials = {};
-          products.forEach(p => initials[p._id] = { quantity: "", price: p.price || "" });
+          products.forEach(p => initials[p._id] = { quantity: "", packs: "", price: p.price || "" });
           setImportInputs(initials);
           setShowModal(true);
         }}>
@@ -172,21 +172,67 @@ export default function ImportPage() {
                     <thead style={{ position: "sticky", top: 0, zIndex: 1, background: "var(--card-bg)" }}>
                       <tr>
                         <th>TÊN MÓN</th>
-                        <th style={{ width: 120, textAlign: "center" }}>SỐ LƯỢNG</th>
+                        <th style={{ width: 110, textAlign: "center" }}>SỐ GÓI</th>
+                        <th style={{ width: 120, textAlign: "center" }}>TỔNG LẺ</th>
                         <th style={{ width: 140, textAlign: "center" }}>ĐƠN GIÁ (₫)</th>
                       </tr>
                     </thead>
                     <tbody>
                       {products.map(p => (
                         <tr key={p._id}>
-                          <td className="fw-600">{p.name} {p.unit ? `(${p.unit})` : ''}</td>
+                          <td className="fw-600">
+                            <div>{p.name} {p.unit ? `(${p.unit})` : ''}</div>
+                            {p.itemsPerPack > 1 && (
+                              <div className="text-secondary fs-11 fw-400">1 {p.packUnit} = {p.itemsPerPack} {p.unit}</div>
+                            )}
+                          </td>
+                          <td>
+                            {p.itemsPerPack > 1 ? (
+                              <div className="pack-btn-container">
+                                <div 
+                                  className={`pack-btn ${importInputs[p._id]?.packs ? 'active' : ''}`}
+                                  onClick={() => {
+                                    const pid = p._id;
+                                    const currentPacks = Number(importInputs[pid]?.packs || 0);
+                                    const newPacks = currentPacks + 1;
+                                    setImportInputs(prev => ({
+                                      ...prev,
+                                      [pid]: {
+                                        ...prev[pid],
+                                        packs: newPacks.toString(),
+                                        quantity: (newPacks * p.itemsPerPack).toString()
+                                      }
+                                    }));
+                                  }}
+                                >
+                                  {importInputs[p._id]?.packs 
+                                    ? `${importInputs[p._id].packs} ${p.packUnit || 'gói'}`
+                                    : `${p.packUnit || 'gói'}`
+                                  }
+                                </div>
+                                {importInputs[p._id]?.packs && (
+                                  <div className="pack-btn-clear" onClick={(e) => {
+                                    e.stopPropagation();
+                                    setImportInputs(prev => ({
+                                      ...prev,
+                                      [p._id]: { ...prev[p._id], packs: "", quantity: "" }
+                                    }));
+                                  }}>
+                                    <X size={10} />
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center text-muted">—</div>
+                            )}
+                          </td>
                           <td>
                             <input 
                               type="number" 
                               min="0" 
                               className="form-input" 
                               style={{ textAlign: "center", fontWeight: "bold" }}
-                              placeholder="0"
+                              placeholder={p.unit}
                               value={importInputs[p._id]?.quantity || ""}
                               onChange={(e) => setImportInputs(prev => ({
                                 ...prev,
